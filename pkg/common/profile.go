@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/ihanick/anydbver/pkg/runtools"
+	"github.com/zelmario/anydbver/pkg/runtools"
 	"io"
 	"log"
 	_ "modernc.org/sqlite"
@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	ANYDBVER_VERSION_DATABASE_SQL_URL = "https://github.com/ihanick/anydbver/raw/master/anydbver_version.sql"
+	ANYDBVER_VERSION_DATABASE_SQL_URL = "https://github.com/zelmario/anydbver/raw/master/anydbver_version.sql"
 	ANYDBVER_DEFAULT_PASSWORD         = "verysecretpassword1^"
 	ANYDBVER_MINIO_USER               = "UIdgE4sXPBTcBB4eEawU"
 	ANYDBVER_MINIO_PASS               = "7UdlDzBF769dbIOMVILV"

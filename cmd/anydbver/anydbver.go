@@ -25,10 +25,10 @@ import (
 	"strings"
 	"unicode"
 
-	anydbver_common "github.com/ihanick/anydbver/pkg/common"
-	"github.com/ihanick/anydbver/pkg/runtools"
-	unmodified_docker "github.com/ihanick/anydbver/pkg/unmodified_docker"
-	versionfetch "github.com/ihanick/anydbver/pkg/version_fetch"
+	anydbver_common "github.com/zelmario/anydbver/pkg/common"
+	"github.com/zelmario/anydbver/pkg/runtools"
+	unmodified_docker "github.com/zelmario/anydbver/pkg/unmodified_docker"
+	versionfetch "github.com/zelmario/anydbver/pkg/version_fetch"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	_ "modernc.org/sqlite"
@@ -1918,7 +1918,7 @@ func main() {
 	destroyCmd.Flags().BoolP("remove-cache", "", false, "Also remove anydbver-cache images")
 	updateCmd := &cobra.Command{
 		Use:   "update",
-		Short: "Deletes current version information database and downloads latest one from https://github.com/ihanick/anydbver/blob/master/anydbver_version.sql",
+		Short: "Deletes current version information database and downloads latest one from https://github.com/zelmario/anydbver/blob/master/anydbver_version.sql",
 		Run: func(cmd *cobra.Command, args []string) {
 			dbFile := anydbver_common.GetDatabasePath(logger)
 			if len(args) >= 1 {
