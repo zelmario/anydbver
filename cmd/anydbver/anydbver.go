@@ -1280,25 +1280,29 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 		"-v", filepath.Dir(anydbver_common.GetConfigPath(logger)) + "/secret:/vagrant/secret:Z",
 	}
 
+	// Try current directory first, then parent directory (for when binary is in tools/)
+	projectRoot := ""
 	if dirInfo, err := os.Stat("roles"); err == nil && dirInfo.IsDir() {
-		realPath, err := filepath.Abs("roles")
-		commonPath, err := filepath.Abs("common")
-		if err == nil {
-			volumes = append(volumes, []string{
-				"-v",
-				realPath + ":/vagrant/roles:Z",
-				"-v",
-				commonPath + ":/vagrant/common:Z",
-			}...)
-		}
+		projectRoot, _ = filepath.Abs(".")
+	} else if dirInfo, err := os.Stat("../roles"); err == nil && dirInfo.IsDir() {
+		projectRoot, _ = filepath.Abs("..")
 	}
-	if fileInfo, err := os.Stat("playbook.yml"); err == nil && !fileInfo.IsDir() {
-		realPath, err := filepath.Abs("playbook.yml")
-		if err == nil {
-			volumes = append(volumes, []string{
-				"-v",
-				realPath + ":/vagrant/playbook.yml:Z",
-			}...)
+	if projectRoot != "" {
+		for _, dir := range []struct{ src, dest string }{
+			{"roles", "/vagrant/roles"},
+			{"common", "/vagrant/common"},
+			{"tools", "/vagrant/tools"},
+			{"library", "/vagrant/library"},
+			{"configs", "/vagrant/configs"},
+		} {
+			fullPath := filepath.Join(projectRoot, dir.src)
+			if di, err := os.Stat(fullPath); err == nil && di.IsDir() {
+				volumes = append(volumes, "-v", fullPath+":"+dir.dest+":Z")
+			}
+		}
+		playbookPath := filepath.Join(projectRoot, "playbook.yml")
+		if fi, err := os.Stat(playbookPath); err == nil && !fi.IsDir() {
+			volumes = append(volumes, "-v", playbookPath+":/vagrant/playbook.yml:Z")
 		}
 	}
 
@@ -1833,9 +1837,7 @@ func main() {
 		Build = date
 	}
 
-	if Version != "unknown" {
-		anydbver_common.RELEASE_VERSION = strings.TrimPrefix(Version, "v")
-	}
+
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 

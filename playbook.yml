@@ -175,6 +175,7 @@
     soft: >-
       {{
       'ps80' if percona_server_version.startswith('8.0') else
+      'pxc84' if percona_xtradb_cluster_version.startswith('8.4') else
       'pxc80' if percona_xtradb_cluster_version.startswith('8.0') else
       'ps57' if percona_server_version.startswith('5.7') else
       'pxc57' if percona_xtradb_cluster_version.startswith('5.7') else
