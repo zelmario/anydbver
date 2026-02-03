@@ -3818,7 +3818,7 @@ INSERT INTO ansible_arguments VALUES('postgresql','user','%','','extra_db_user',
 INSERT INTO ansible_arguments VALUES('postgresql','master','%','NODE','extra_master_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('postgresql','cluster','%','','extra_cluster_name','cluster1',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','cluster','%','','extra_cluster_name','cluster1',1,1);
-INSERT INTO ansible_arguments VALUES('percona-server-mongodb','version','%','VERSION','extra_psmdb_version','7.0',1,1);
+INSERT INTO ansible_arguments VALUES('percona-server-mongodb','version','%','VERSION','extra_psmdb_version','8.0',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','opts-file','%','','extra_db_opts_file','mongo/enable_wt.conf',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','master','%','NODE','extra_master_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('patroni','version','%','VERSION','extra_patroni_version','3.3.0',1,1);
