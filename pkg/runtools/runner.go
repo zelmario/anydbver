@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -94,19 +95,19 @@ func RunPipe(logger *log.Logger, args []string, errMsg string, ignoreMsg *regexp
 	}
 
 	full_output := ""
+	var wg sync.WaitGroup
 	// Function to copy the output from the pipes to the logger
 	copyOutput := func(r io.Reader, prefix string) {
+		defer wg.Done()
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			output_chunk := scanner.Text()
 			full_output = full_output + "\n" + output_chunk
 			logger.Println(prefix, output_chunk)
 		}
-		if err := scanner.Err(); err != nil {
-			logger.Println("Error reading from pipe:", err)
-		}
 	}
 
+	wg.Add(2)
 	go copyOutput(stdoutPipe, "")
 	go copyOutput(stderrPipe, "")
 
@@ -116,9 +117,11 @@ func RunPipe(logger *log.Logger, args []string, errMsg string, ignoreMsg *regexp
 	select {
 	case <-time.After(COMMAND_TIMEOUT * time.Second):
 		cmd.Process.Kill()
+		wg.Wait()
 		logger.Println("Command timed out")
 		return full_output, errors.New("Command timed out")
 	case err := <-done:
+		wg.Wait()
 		if err != nil {
 			if ignoreMsg != nil && ignoreMsg.Match([]byte(full_output)) {
 				return full_output, nil
