@@ -4,7 +4,7 @@ import "runtime"
 
 const (
 	USE_LOCAL_IMAGES = false
-	IMAGE_PUBLISHER  = "ihanick"
+	IMAGE_PUBLISHER  = "zelmar"
 )
 
 var RELEASE_VERSION = "0.1.23"
