@@ -62,7 +62,7 @@
         cmd: systemctl start "{{package_info['systemd_service']}}"
 
     - name: change postgresql password on debian-based
-      when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and replication_type == 'logical' or master_ip == ''
+      when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and (replication_type == 'logical' or master_ip == '')
       shell:
         cmd: sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '{{ db_password }}'"
 
@@ -115,7 +115,7 @@
 - name: Setup PMM client with postgres
   when: pmm_url != '' and (postgresql_version != '' or percona_postgresql_version != '')
   shell:
-    cmd: /bin/bash -e /vagrant/tools/setup_pmm.sh "{{soft}}" postgres "{{db_password}}" pmm_user "{{db_password}}" "{{ pkg[dist].systemd if ('systemd' in pkg[dist]) and percona_postgresql_version !='' else os[dist][soft].systemd_service if soft else db_systemd_service }}" "{{ 'yes' if pmm_client_version != '' and (percona_postgresql_version.startswith('11.') or percona_postgresql_version.startswith('12.') or percona_postgresql_version.startswith('13.') or pg_stat_monitor != '' ) else 'no' }}"
+    cmd: /bin/bash -e /vagrant/tools/setup_pmm.sh "{{soft}}" postgres "{{db_password}}" pmm_user "{{db_password}}" "{{pg_systemd_svc}}" "{{ 'yes' if pmm_client_version != '' and (percona_postgresql_version.startswith('11.') or percona_postgresql_version.startswith('12.') or percona_postgresql_version.startswith('13.') or pg_stat_monitor != '' ) else 'no' }}"
     creates: /root/pmm-postgresql.applied
 
 - name: Setup PGPool

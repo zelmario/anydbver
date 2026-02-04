@@ -1357,7 +1357,7 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 	env := map[string]string{}
 	errMsg := "Error running Ansible"
 	ignoreMsg := regexp.MustCompile("ignore this")
-	ansible_output, err := runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env)
+	ansible_output, err := runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, 600)
 	if err != nil {
 		logger.Println("Ansible failed with errors: ")
 		fatalPattern := regexp.MustCompile(`FAILED[!]|failed=`)
@@ -1465,7 +1465,7 @@ mirrors:
 	env := map[string]string{}
 	errMsg := "Error creating k3d cluster"
 	ignoreMsg := regexp.MustCompile("ignore this")
-	runtools.RunPipe(logger, k3d_create_cmd, errMsg, ignoreMsg, true, env)
+	runtools.RunPipe(logger, k3d_create_cmd, errMsg, ignoreMsg, true, env, 600)
 }
 
 func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider string, namespace string, args []string, verbose bool, memory string, cpus string) {

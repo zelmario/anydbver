@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	COMMAND_TIMEOUT                          = 600
+	COMMAND_TIMEOUT                          = 300
 	ANYDBVER_ERROR_NOT_CONFIGURED            = 2
 	ANYDBVER_ERROR_BACKEND_PROBLEM           = 3
 	ANYDBVER_ANSIBLE_PROBLEM                 = 4
@@ -72,7 +72,7 @@ func RunFatal(logger *log.Logger, args []string, errMsg string, ignoreMsg *regex
 	}
 }
 
-func RunPipe(logger *log.Logger, args []string, errMsg string, ignoreMsg *regexp.Regexp, printCmd bool, env map[string]string) (string, error) {
+func RunPipe(logger *log.Logger, args []string, errMsg string, ignoreMsg *regexp.Regexp, printCmd bool, env map[string]string, timeout int) (string, error) {
 	envVars := make([]string, 0)
 	for k, v := range env {
 		envVars = append(envVars, k+"="+v)
@@ -115,7 +115,7 @@ func RunPipe(logger *log.Logger, args []string, errMsg string, ignoreMsg *regexp
 	go func() { done <- cmd.Wait() }()
 
 	select {
-	case <-time.After(COMMAND_TIMEOUT * time.Second):
+	case <-time.After(time.Duration(timeout) * time.Second):
 		cmd.Process.Kill()
 		wg.Wait()
 		logger.Println("Command timed out")
@@ -179,5 +179,5 @@ func ExecCommandInContainer(logger *log.Logger, full_name string, cmd string, er
 
 	env := map[string]string{}
 	ignoreMsg := regexp.MustCompile("ignore this")
-	return RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env)
+	return RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, COMMAND_TIMEOUT)
 }
