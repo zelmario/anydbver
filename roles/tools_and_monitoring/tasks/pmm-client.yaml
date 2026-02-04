@@ -29,7 +29,7 @@
     pmm_full_url: "{{ pmm_url if '://' in pmm_url else 'https://admin:verysecretpassword1%5E@' + pmm_url + (':8443' if ':' not in pmm_url else '') }}"
   shell:
     cmd: >-
-      until curl -k "{{pmm_full_url}}"/graph/ |grep -q grafana ; do sleep 1 ; done;
+      cnt=0; until curl -k "{{pmm_full_url}}"/graph/ |grep -q grafana || [ $cnt -ge 120 ]; do cnt=$((cnt+1)); sleep 1 ; done;
       /usr/bin/pmm-admin config
       --server-insecure-tls
       --server-url="{{pmm_full_url}}" || true

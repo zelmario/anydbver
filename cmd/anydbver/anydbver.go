@@ -117,6 +117,28 @@ func getContainerIp(provider string, logger *log.Logger, namespace string, conta
 	return "", errors.New("node ip is not found")
 }
 
+func getContainerPort(logger *log.Logger, namespace string, name string) string {
+	containerName := anydbver_common.MakeContainerHostName(logger, namespace, name)
+	args := []string{"docker", "inspect", containerName, "--format", `{{range $p, $conf := .NetworkSettings.Ports}}{{$p}} {{end}}`}
+
+	env := map[string]string{}
+	errMsg := "Error getting docker container port"
+	ignoreMsg := regexp.MustCompile("ignore this")
+
+	output, err := runtools.RunGetOutput(logger, args, errMsg, ignoreMsg, false, env, runtools.COMMAND_TIMEOUT)
+	if err != nil {
+		return ""
+	}
+	output = strings.TrimSpace(output)
+	if strings.Contains(output, "8443") {
+		return ":8443"
+	}
+	if strings.Contains(output, "443") {
+		return ":443"
+	}
+	return ""
+}
+
 func getNodeIp(provider string, logger *log.Logger, namespace string, name string) (string, error) {
 	if provider == "docker" || provider == "docker-image" {
 		return getContainerIp(provider, logger, namespace, anydbver_common.MakeContainerHostName(logger, namespace, name))
@@ -1143,7 +1165,12 @@ func deployHost(provider string, logger *log.Logger, namespace string, name stri
 					fmt.Println("Error getting node ip:", err)
 				}
 
-				return fmt.Sprintf("%s='https://admin:%s@%s%s'", submatches[1], url.QueryEscape(anydbver_common.ANYDBVER_DEFAULT_PASSWORD), ip, submatches[3])
+				port := submatches[3]
+				if port == "" {
+					port = getContainerPort(logger, namespace, node)
+				}
+
+				return fmt.Sprintf("%s='https://admin:%s@%s%s'", submatches[1], url.QueryEscape(anydbver_common.ANYDBVER_DEFAULT_PASSWORD), ip, port)
 			}
 			return match
 		})
@@ -1334,12 +1361,20 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 	if err != nil {
 		logger.Println("Ansible failed with errors: ")
 		fatalPattern := regexp.MustCompile(`FAILED[!]|failed=`)
+		taskPattern := regexp.MustCompile(`^TASK \[.*\]`)
+		lastTask := ""
 		scanner := bufio.NewScanner(strings.NewReader(ansible_output))
 		for scanner.Scan() {
 			line := scanner.Text()
+			if taskPattern.MatchString(line) {
+				lastTask = line
+			}
 			if fatalPattern.MatchString(line) {
 				logger.Print(line)
 			}
+		}
+		if strings.Contains(err.Error(), "timed out") && lastTask != "" {
+			logger.Printf("Timed out during: %s", lastTask)
 		}
 		os.Exit(runtools.ANYDBVER_ANSIBLE_PROBLEM)
 	}
