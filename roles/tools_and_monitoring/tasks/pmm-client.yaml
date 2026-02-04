@@ -30,9 +30,7 @@
   shell:
     cmd: >-
       cnt=0; until curl -k "{{pmm_full_url}}"/graph/ |grep -q grafana || [ $cnt -ge 120 ]; do cnt=$((cnt+1)); sleep 1 ; done;
-      /usr/bin/pmm-admin config
-      --server-insecure-tls
-      --server-url="{{pmm_full_url}}" || true
+      for i in 1 2 3 4 5; do /usr/bin/pmm-admin config --server-insecure-tls --server-url="{{pmm_full_url}}" && break || sleep 5; done
 - name: Setup pmm-admin PMM1
   when: pmm_client_version.startswith('1.') and pmm_url != '' and install_only == ''
   register: pmm_admin_config
