@@ -20,3 +20,9 @@
   command:
     cmd: /bin/bash /vagrant/tools/setup_patroni.sh "{{ cluster_name }}" "{{ db_password }}" "{{ etcd_ip }}" "{{ patroni_standby }}"
     creates: /root/patroni.configured
+
+- name: Setup PMM client with Patroni PostgreSQL
+  when: pmm_url != ''
+  command:
+    cmd: /bin/bash /vagrant/tools/setup_pmm_patroni.sh "{{ db_password }}"
+    creates: /root/pmm-patroni.applied

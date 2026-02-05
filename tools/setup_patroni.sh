@@ -38,19 +38,31 @@ cat > /usr/local/bin/setup_cluster.sh << EOF
 #!/bin/bash
 export PGPASSFILE=/tmp/pgpass0
 export PATH=/usr/local/sbin:/usr/local/bin:$PG_BIN:/usr/sbin:/usr/bin
-until psql -U postgres -d postgres -h $(node_ip.sh) -c '\l'; do sleep 1; done
-psql -U postgres -d postgres -h $(node_ip.sh) -c "CREATE USER replicator WITH REPLICATION ENCRYPTED PASSWORD '${SECRET}';"
+until psql -U postgres -d postgres -h localhost -c '\l'; do sleep 1; done
+psql -U postgres -d postgres -h localhost -c "CREATE USER replicator WITH REPLICATION ENCRYPTED PASSWORD '${SECRET}';"
 EOF
 
 chmod +x /usr/local/bin/setup_cluster.sh
 
-/usr/local/bin/setup_cluster.sh
+# setup_cluster.sh is called by Patroni's post_init hook after bootstrap
+# Don't call it directly here - PostgreSQL is not running yet
 
 if [[ ${STANDBY} != "" ]]; then
 	STANDBY_CONF="
     standby_cluster:
       host: ${STANDBY}
       port: 5432"
+    # Wait for primary cluster to be ready with replicator user
+    echo "Waiting for primary cluster at ${STANDBY} to be ready..."
+    export PGPASSFILE=/tmp/pgpass0
+    for i in {1..120}; do
+        if psql -U replicator -h ${STANDBY} -d postgres -c "SELECT 1" &>/dev/null; then
+            echo "Primary cluster is ready"
+            break
+        fi
+        echo "Attempt $i: Primary not ready yet, waiting..."
+        sleep 5
+    done
 else
    STANDBY_CONF=""
 fi
@@ -94,6 +106,7 @@ bootstrap:
  - data-checksums
  pg_hba:  # Add following lines to pg_hba.conf after running 'initdb'
  - host replication replicator $LOCAL_NET md5
+ - host replication replicator 0.0.0.0/0 md5
  - host replication replicator 127.0.0.1/32 trust
  - host all all $LOCAL_NET md5
  - host all all 0.0.0.0/0 md5
