@@ -1468,6 +1468,117 @@ mirrors:
 	runtools.RunPipe(logger, k3d_create_cmd, errMsg, ignoreMsg, true, env, 600)
 }
 
+func checkEverestPrerequisites(logger *log.Logger) {
+	missing := []string{}
+
+	// Check docker
+	if _, err := exec.LookPath("docker"); err != nil {
+		missing = append(missing, "docker")
+	} else {
+		// Check docker daemon is running
+		cmd := exec.Command("docker", "info")
+		cmd.Stdout = nil
+		cmd.Stderr = nil
+		if err := cmd.Run(); err != nil {
+			logger.Fatal("Docker is installed but the daemon is not running. Please start Docker first.")
+		}
+	}
+
+	// Check kubectl
+	if _, err := exec.LookPath("kubectl"); err != nil {
+		missing = append(missing, "kubectl")
+	}
+
+	// Check k3d
+	if _, err := anydbver_common.GetK3dPath(logger); err != nil {
+		missing = append(missing, "k3d")
+	}
+
+	if len(missing) > 0 {
+		logger.Fatalf("Missing required tools: %s. Please install them before deploying Everest.", strings.Join(missing, ", "))
+	}
+
+	logger.Printf("All prerequisites found: docker, kubectl, k3d")
+}
+
+func deployEverest(logger *log.Logger, namespace string, nodes int, everestVersion string) {
+	checkEverestPrerequisites(logger)
+
+	cluster_name := anydbver_common.MakeContainerHostName(logger, namespace, "cluster1")
+
+	// Create k3d cluster
+	logger.Printf("Creating k3d cluster with %d nodes...", nodes)
+	k3dArgs := map[string]string{
+		"version": "latest",
+		"nodes":   strconv.Itoa(nodes),
+	}
+	createK3dCluster(logger, namespace, "cluster1", k3dArgs)
+
+	// Wait for cluster to be ready
+	logger.Printf("Waiting for k3d cluster to be ready...")
+	env := map[string]string{}
+	errMsg := "Error waiting for k3d cluster"
+	ignoreMsg := regexp.MustCompile("ignore this")
+
+	// Get kubeconfig
+	homeDir, _ := os.UserHomeDir()
+	kubeconfig_path := filepath.Join(homeDir, ".kube", "config")
+	os.MkdirAll(filepath.Dir(kubeconfig_path), 0755)
+	k3d_path, _ := anydbver_common.GetK3dPath(logger)
+	runtools.RunFatal(logger, []string{k3d_path, "kubeconfig", "get", cluster_name}, errMsg, ignoreMsg, true, env)
+
+	// Export kubeconfig
+	kubeconfig_cmd := []string{k3d_path, "kubeconfig", "write", cluster_name, "--output", kubeconfig_path}
+	runtools.RunFatal(logger, kubeconfig_cmd, errMsg, ignoreMsg, true, env)
+
+	// Get cluster IP for kubeconfig fix
+	clusterIp, _ := getContainerIp("docker", logger, namespace, "k3d-"+cluster_name+"-server-0")
+
+	// Install Percona Everest
+	logger.Printf("Installing Percona Everest %s...", everestVersion)
+	helm_install_everest := []string{
+		"docker", "run", "--rm",
+		"--network", getNetworkName(logger, namespace),
+		"-v", kubeconfig_path + ":/root/.kube/config",
+		"alpine/helm:latest",
+		"upgrade", "--install", "everest-core", "everest",
+		"--repo", "https://percona.github.io/percona-helm-charts/",
+		"--namespace", "everest-system",
+		"--create-namespace",
+		"--kubeconfig", "/root/.kube/config",
+		"--kube-apiserver", "https://" + clusterIp + ":6443",
+		"--wait", "--timeout", "10m",
+	}
+	if everestVersion != "latest" && everestVersion != "" {
+		helm_install_everest = append(helm_install_everest, "--version", everestVersion)
+	}
+	runtools.RunPipe(logger, helm_install_everest, "Error installing Percona Everest", ignoreMsg, true, env, 600)
+
+	// Start port-forward in background
+	logger.Printf("Starting port-forward to Everest UI...")
+	kubectl_portforward := exec.Command("kubectl", "port-forward", "svc/everest", "8080:8080",
+		"-n", "everest-system", "--address", "0.0.0.0",
+		"--kubeconfig", kubeconfig_path)
+	kubectl_portforward.Start()
+
+	// Print access instructions
+	fmt.Println("")
+	fmt.Println("===============================================")
+	fmt.Println("Percona Everest deployed successfully!")
+	fmt.Println("===============================================")
+	fmt.Println("")
+	fmt.Println("Everest UI: http://localhost:8080")
+	fmt.Println("Username:   admin")
+	fmt.Println("Password:   kubectl get secret everest-accounts -n everest-system -o jsonpath='{.data.users\\.yaml}' | base64 -d")
+	fmt.Println("")
+	fmt.Println("Port-forward is running in background (PID:", kubectl_portforward.Process.Pid, ")")
+	fmt.Println("To stop: kill", kubectl_portforward.Process.Pid)
+	fmt.Println("")
+	fmt.Println("To restart port-forward manually:")
+	fmt.Println("  kubectl port-forward svc/everest 8080:8080 -n everest-system --address 0.0.0.0")
+	fmt.Println("")
+}
+
 func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider string, namespace string, args []string, verbose bool, memory string, cpus string) {
 	privileged := ""
 	re_lastosver := regexp.MustCompile(`=[^=]+$`)
@@ -2079,6 +2190,24 @@ func main() {
 	}
 
 	rootCmd.AddCommand(shellCmd)
+
+	everestCmd := &cobra.Command{
+		Use:   "everest",
+		Short: "Deploy Percona Everest on k3d cluster",
+		Long: `Deploy a k3d Kubernetes cluster with Percona Everest installed.
+This provides a local Database-as-a-Service platform for MySQL, PostgreSQL, and MongoDB.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			nodes, _ := cmd.Flags().GetInt("nodes")
+			everestVersion, _ := cmd.Flags().GetString("version")
+
+			deleteNamespace(logger, provider, namespace)
+			deployEverest(logger, namespace, nodes, everestVersion)
+		},
+	}
+	everestCmd.Flags().Int("nodes", 3, "Number of k3d nodes")
+	everestCmd.Flags().String("version", "latest", "Percona Everest version")
+
+	rootCmd.AddCommand(everestCmd)
 
 	rootCmd.PersistentFlags().StringVarP(&provider, "provider", "p", "", "Container provider")
 	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "Namespace")
