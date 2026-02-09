@@ -3689,6 +3689,7 @@ INSERT INTO general_version VALUES('3.3.1-7','el8','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.4.0-7','el8','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.4.1-7','el8','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.5.0-7','el8','x86_64','pmm-client');
+INSERT INTO general_version VALUES('3.6.0-7','el8','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.0.0-7','el8','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.1.0-7','el8','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.2.0-7','el8','x86_64','pmm-client');
@@ -3696,6 +3697,7 @@ INSERT INTO general_version VALUES('3.3.1-7','el9','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.4.0-7','el9','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.4.1-7','el9','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.5.0-7','el9','x86_64','pmm-client');
+INSERT INTO general_version VALUES('3.6.0-7','el9','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.0.0-7','el9','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.1.0-7','el9','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.2.0-7','el9','x86_64','pmm-client');
@@ -3705,15 +3707,18 @@ INSERT INTO general_version VALUES('3.3.1-7','el9','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.4.0-7','el9','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.4.1-7','el9','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.5.0-7','el9','aarch64','pmm-client');
+INSERT INTO general_version VALUES('3.6.0-7','el9','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.0.0-7','el9','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.1.0-7','el9','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.2.0-7','el9','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.4.0-7','el10','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.4.1-7','el10','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.5.0-7','el10','x86_64','pmm-client');
+INSERT INTO general_version VALUES('3.6.0-7','el10','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.4.0-7','el10','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.4.1-7','el10','aarch64','pmm-client');
 INSERT INTO general_version VALUES('3.5.0-7','el10','aarch64','pmm-client');
+INSERT INTO general_version VALUES('3.6.0-7','el10','aarch64','pmm-client');
 CREATE TABLE percona_backup_mongodb_version(
   version varchar(20),
   os varchar(20),
