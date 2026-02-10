@@ -9,7 +9,9 @@ Running multi-node replication clusters in Docker and Kubernetes.
 ```
 mkdir -p ~/.local/bin
 cd ~/.local/bin
-wget -O - https://github.com/zelmario/anydbver/releases/latest/download/anydbver_Linux_x86_64.tar.gz | tar xz anydbver
+wget https://github.com/zelmario/anydbver/releases/latest/download/anydbver
+chmod +x anydbver
+anydbver update
 ```
 3. Usually Linux distributions adding ~/.local/bin to the path and it's enough to login/logout. If not, please put anydbver program to the path
 
