@@ -99,6 +99,7 @@
     server_hostname: "{{ lookup('vars', 'extra_server_hostname', default=lookup('env','HOSTNAME',default='') ) }}"
     haproxy_pg: "{{ lookup('vars', 'extra_haproxy_pg', default=lookup('env','HAPROXY_PG',default='') ) }}"
     haproxy_galera: "{{ lookup('vars', 'extra_haproxy_galera', default=lookup('env','HAPROXY_GALERA',default='') ) }}"
+    pgbouncer: "{{ lookup('vars', 'extra_pgbouncer', default=lookup('env','PGBOUNCER',default='') ) }}"
     mariadb_version: "{{ lookup('vars', 'extra_mariadb_version', default=lookup('env','MARIADB',default='') ) }}"
     mariabackup: "{{ lookup('vars', 'extra_mariabackup', default=lookup('env','MARIABACKUP',default='') ) }}"
     galera:  "{{ lookup('vars', 'extra_galera', default=lookup('env','GALERA',default='') ) }}"
@@ -282,6 +283,11 @@
       when: haproxy_pg != '' or haproxy_galera != ''
       include_role:
         name: haproxy
+
+    - name: PgBouncer
+      when: pgbouncer != ''
+      include_role:
+        name: pgbouncer
 
     - name: Postgresql Role
       when: postgresql_version != '' or percona_postgresql_version != '' or odyssey_version != '' or walg_version != '' or pgpool_version != ''

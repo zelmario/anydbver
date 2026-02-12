@@ -1,0 +1,24 @@
+---
+# tasks file for pgbouncer
+- name: Install PgBouncer
+  package:
+    name:
+      - pgbouncer
+      - postgresql
+    state: present
+
+- name: create pgbouncer config from template
+  template:
+    src: "{{playbook_dir}}/roles/pgbouncer/templates/pgbouncer.ini.j2"
+    dest: "/etc/pgbouncer/pgbouncer.ini"
+
+- name: create pgbouncer userlist
+  template:
+    src: "{{playbook_dir}}/roles/pgbouncer/templates/userlist.txt.j2"
+    dest: "/etc/pgbouncer/userlist.txt"
+
+- name: start pgbouncer
+  systemd:
+    name: pgbouncer
+    state: restarted
+    enabled: True

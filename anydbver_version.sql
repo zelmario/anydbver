@@ -2830,6 +2830,7 @@ INSERT INTO tests VALUES(43,'barman rsync','anydbver deploy pg node1 barman:sour
 INSERT INTO tests VALUES(44,'barman streaming-only','anydbver deploy pg node1 barman:source=node0,method=streaming-only pg');
 INSERT INTO tests VALUES(45,'patroni standby','anydbver deploy ppg:16 patroni:cluster=cluster11 node1 ppg:16,master=node0  patroni:master=node0,cluster=cluster11 node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster11   node3 ppg:16 patroni:standby=node0,cluster=cluster12  node4 ppg:16,master=node3 patroni:master=node3,cluster=cluster12');
 INSERT INTO tests VALUES(46,'PMM3','anydbver deploy pmm:3.3.1,docker-image,port=12443 node1 ps:latest pmm-client:3.3.1-7,server=node0:8443');
+INSERT INTO tests VALUES(47,'pg with pgbouncer','anydbver deploy pgbouncer:node1,node2,node3 node1 pg node2 pg:master=node1 node3 pg:master=node1');
 CREATE TABLE test_cases(
   test_id int,
   cmd varchar(1000)
@@ -3909,6 +3910,8 @@ INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','version','%','VER
 INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','s3','%','','extra_pbm_s3_url','',1,NULL);
 INSERT INTO ansible_arguments VALUES('ldap','password','%','','extra_db_password','secret',1,1);
 INSERT INTO ansible_arguments VALUES('haproxy-pg','version','%','NODE','extra_haproxy_pg','',1,1);
+INSERT INTO ansible_arguments VALUES('pgbouncer','version','%','NODE','extra_pgbouncer','',1,1);
+INSERT INTO ansible_arguments VALUES('pgbouncer','password','%','','extra_db_password','verysecretpassword1^',1,1);
 INSERT INTO ansible_arguments VALUES('postgresql','clustercheck','%','','extra_db_features','clustercheck',1,NULL);
 INSERT INTO ansible_arguments VALUES('percona-postgresql','clustercheck','%','','extra_db_features','clustercheck',1,NULL);
 INSERT INTO ansible_arguments VALUES('minio','version','%','VERSION','extra_minio_version','latest',1,1);
