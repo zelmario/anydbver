@@ -1,5 +1,12 @@
 ---
 # tasks file for pgbouncer
+- name: Install PGDG repo
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux'
+  yum:
+    name: "https://download.postgresql.org/pub/repos/yum/reporpms/EL-{{ansible_distribution_major_version}}-x86_64/pgdg-redhat-repo-latest.noarch.rpm"
+    state: present
+    disable_gpg_check: yes
+
 - name: Install PgBouncer
   package:
     name:
