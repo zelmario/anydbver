@@ -476,7 +476,9 @@ func createNamespace(logger *log.Logger, containers []ContainerConfig, namespace
 			netCreated = true
 		}
 
-		createContainer(logger, container)
+		if container.Provider != "docker-image" {
+			createContainer(logger, container)
+		}
 	}
 }
 
@@ -1669,7 +1671,14 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 			}
 		}
 
-		containers = append(containers, ContainerConfig{Name: node, OSVersion: value, Privileged: privileged_container, ExposePort: expose_port, Provider: provider, Namespace: namespace, Memory: memory, CPUs: cpus, DeployArgs: deployArgs})
+		containers = append(containers, ContainerConfig{Name: node, OSVersion: value, Privileged: privileged_container, ExposePort: expose_port, Provider: nodeProvider[node], Namespace: namespace, Memory: memory, CPUs: cpus, DeployArgs: deployArgs})
+	}
+	// Add docker-image nodes to containers list for network creation
+	// (docker-image nodes are stripped from osvers so ConvertStringToMap skips them)
+	for node, prov := range nodeProvider {
+		if prov == "docker-image" {
+			containers = append(containers, ContainerConfig{Name: node, Provider: "docker-image", Namespace: namespace})
+		}
 	}
 	createNamespace(logger, containers, namespace)
 	var nodeIdxs []int
