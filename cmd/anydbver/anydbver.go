@@ -1307,12 +1307,20 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 		"-v", filepath.Dir(anydbver_common.GetConfigPath(logger)) + "/secret:/vagrant/secret:Z",
 	}
 
-	// Try current directory first, then parent directory (for when binary is in tools/)
+	// Try current directory first, then parent directory (for when binary is in tools/),
+	// then fall back to the directory of the binary itself
 	projectRoot := ""
 	if dirInfo, err := os.Stat("roles"); err == nil && dirInfo.IsDir() {
 		projectRoot, _ = filepath.Abs(".")
 	} else if dirInfo, err := os.Stat("../roles"); err == nil && dirInfo.IsDir() {
 		projectRoot, _ = filepath.Abs("..")
+	} else if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		if dirInfo, err := os.Stat(filepath.Join(exeDir, "roles")); err == nil && dirInfo.IsDir() {
+			projectRoot = exeDir
+		} else if dirInfo, err := os.Stat(filepath.Join(filepath.Dir(exeDir), "roles")); err == nil && dirInfo.IsDir() {
+			projectRoot = filepath.Dir(exeDir)
+		}
 	}
 	if projectRoot != "" {
 		for _, dir := range []struct{ src, dest string }{
