@@ -467,7 +467,7 @@ func createNamespace(logger *log.Logger, containers []ContainerConfig, namespace
 	network := getNetworkName(logger, namespace)
 	netCreated := false
 	for _, container := range containers {
-		if netCreated == false && (container.Provider == "docker" || container.Provider == "kubectl") {
+		if netCreated == false && (container.Provider == "docker" || container.Provider == "docker-image" || container.Provider == "kubectl") {
 			args := []string{"docker", "network", "create", network}
 			env := map[string]string{}
 			errMsg := "Error creating docker network"
