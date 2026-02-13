@@ -246,6 +246,7 @@
           # sudo -u postgres pgbackrest info
           # sudo -u postgres pgbackrest restore --stanza=db --log-level-console=info
     - name: Enable archiving in postgresql.conf
+      when: patroni_version == ''
       blockinfile:
         path: "{{pg_conf_dir}}/postgresql.conf"
         block: |
@@ -253,12 +254,13 @@
           archive_command = 'pgbackrest --stanza=db archive-push %p'
           archive_timeout = '60'
     - name: restart postgresql
+      when: patroni_version == ''
       systemd:
         name: "{{pg_systemd_svc}}"
         state: restarted
         enabled: True
     - name: Create stanza
-      when: db_systemd_service != '' or (soft != '' and os[dist][soft].systemd_service)
+      when: patroni_version == '' and (db_systemd_service != '' or (soft != '' and os[dist][soft].systemd_service))
       command:
         cmd: sudo -u postgres pgbackrest stanza-create --stanza=db --log-level-console=info
 

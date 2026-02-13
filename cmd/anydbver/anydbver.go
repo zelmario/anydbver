@@ -963,7 +963,7 @@ func ParseDeploymentKeyword(logger *log.Logger, keyword string) DeploymentKeywor
 		deployCmd = alias
 	}
 
-	if deployCmd == "mongos-shard" || deployCmd == "mongos-cfg" || deployCmd == "haproxy-pg" || deployCmd == "pgbouncer" {
+	if deployCmd == "mongos-shard" || deployCmd == "mongos-cfg" || deployCmd == "haproxy-pg" || deployCmd == "haproxy-patroni" || deployCmd == "pgbouncer" {
 		args["version"] = keyword
 		return DeploymentKeywordData{
 			Cmd:  deployCmd,
@@ -1137,7 +1137,7 @@ func deployHost(provider string, logger *log.Logger, namespace string, name stri
 		content := anydbver_common.MakeContainerHostName(logger, namespace, name) + " ansible_connection=ssh ansible_user=root ansible_ssh_private_key_file=secret/id_rsa ansible_host=" + ip + " ansible_python_interpreter=/usr/bin/python3 ansible_ssh_common_args='-o StrictHostKeyChecking=no ' " + ansible_deployment_args + "\n"
 
 		for {
-			re_mongo_shard_hosts := regexp.MustCompile(`(extra_mongos_shard|extra_mongos_cfg|extra_haproxy_pg|extra_pgbouncer|extra_patroni_standby)='([^']*)(node[0-9]+)([^']*)'`)
+			re_mongo_shard_hosts := regexp.MustCompile(`(extra_mongos_shard|extra_mongos_cfg|extra_haproxy_pg|extra_haproxy_patroni|extra_pgbouncer|extra_patroni_standby)='([^']*)(node[0-9]+)([^']*)'`)
 			content_with_ip := re_mongo_shard_hosts.ReplaceAllStringFunc(content, func(match string) string {
 				submatches := re_mongo_shard_hosts.FindStringSubmatch(match)
 				if len(submatches) > 4 {

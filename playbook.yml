@@ -99,6 +99,7 @@
     server_hostname: "{{ lookup('vars', 'extra_server_hostname', default=lookup('env','HOSTNAME',default='') ) }}"
     haproxy_pg: "{{ lookup('vars', 'extra_haproxy_pg', default=lookup('env','HAPROXY_PG',default='') ) }}"
     haproxy_galera: "{{ lookup('vars', 'extra_haproxy_galera', default=lookup('env','HAPROXY_GALERA',default='') ) }}"
+    haproxy_patroni: "{{ lookup('vars', 'extra_haproxy_patroni', default=lookup('env','HAPROXY_PATRONI',default='') ) }}"
     pgbouncer: "{{ lookup('vars', 'extra_pgbouncer', default=lookup('env','PGBOUNCER',default='') ) }}"
     mariadb_version: "{{ lookup('vars', 'extra_mariadb_version', default=lookup('env','MARIADB',default='') ) }}"
     mariabackup: "{{ lookup('vars', 'extra_mariabackup', default=lookup('env','MARIABACKUP',default='') ) }}"
@@ -280,7 +281,7 @@
         name: user_security
 
     - name: HAProxy
-      when: haproxy_pg != '' or haproxy_galera != ''
+      when: haproxy_pg != '' or haproxy_galera != '' or haproxy_patroni != ''
       include_role:
         name: haproxy
 

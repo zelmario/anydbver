@@ -2831,6 +2831,7 @@ INSERT INTO tests VALUES(44,'barman streaming-only','anydbver deploy pg node1 ba
 INSERT INTO tests VALUES(45,'patroni standby','anydbver deploy ppg:16 patroni:cluster=cluster11 node1 ppg:16,master=node0  patroni:master=node0,cluster=cluster11 node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster11   node3 ppg:16 patroni:standby=node0,cluster=cluster12  node4 ppg:16,master=node3 patroni:master=node3,cluster=cluster12');
 INSERT INTO tests VALUES(46,'PMM3','anydbver deploy pmm:3.3.1,docker-image,port=12443 node1 ps:latest pmm-client:3.3.1-7,server=node0:8443');
 INSERT INTO tests VALUES(47,'pg with pgbouncer','anydbver deploy pgbouncer:node1,node2,node3 node1 pg node2 pg:master=node1 node3 pg:master=node1');
+INSERT INTO tests VALUES(48,'patroni pgbackrest haproxy pgbouncer','anydbver deploy ppg:16 patroni:cluster=cluster1 pgbackrest node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest node3 haproxy-patroni:node0,node1,node2 node4 pgbouncer:node3');
 CREATE TABLE test_cases(
   test_id int,
   cmd varchar(1000)
@@ -2872,6 +2873,7 @@ INSERT INTO test_cases VALUES(41,'anydbver exec node1 -- bash -ilc "pbm status"|
 INSERT INTO test_cases VALUES(43,'sleep 60;anydbver exec node1 -- sudo -u barman barman backup node0');
 INSERT INTO test_cases VALUES(44,'sleep 60;anydbver exec node1 -- sudo -u barman barman backup node0');
 INSERT INTO test_cases VALUES(45,'echo \"patronictl list | grep -q Standby\" | anydbver exec node3');
+INSERT INTO test_cases VALUES(48,'echo "patronictl list" | anydbver exec node0 | grep -q running && echo "pgbackrest info" | anydbver exec node0 | grep -q db && echo "curl -s localhost:8404/stats" | anydbver exec node3 | grep -q pgReadWrite && echo "psql -h localhost -p 6432 -U postgres -c \"SELECT 1\"" | anydbver exec node4 | grep -q 1');
 CREATE TABLE mariadb_version(
   version varchar(20),
   os varchar(20),
@@ -3910,6 +3912,7 @@ INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','version','%','VER
 INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','s3','%','','extra_pbm_s3_url','',1,NULL);
 INSERT INTO ansible_arguments VALUES('ldap','password','%','','extra_db_password','secret',1,1);
 INSERT INTO ansible_arguments VALUES('haproxy-pg','version','%','NODE','extra_haproxy_pg','',1,1);
+INSERT INTO ansible_arguments VALUES('haproxy-patroni','version','%','NODE','extra_haproxy_patroni','',1,1);
 INSERT INTO ansible_arguments VALUES('pgbouncer','version','%','NODE','extra_pgbouncer','',1,1);
 INSERT INTO ansible_arguments VALUES('pgbouncer','password','%','','extra_db_password','verysecretpassword1^',1,1);
 INSERT INTO ansible_arguments VALUES('postgresql','clustercheck','%','','extra_db_features','clustercheck',1,NULL);
@@ -4008,6 +4011,7 @@ INSERT INTO help_examples VALUES('pmm-server','anydbver deploy pmm:docker-image=
 INSERT INTO help_examples VALUES('percona-server','anydbver deploy ps:latest,expose=3306');
 INSERT INTO help_examples VALUES('pgbackrest','anydbver deploy minio:docker-image,admin-port=9091:9090 node1 pg pgbackrest:s3=node0');
 INSERT INTO help_examples VALUES('pgbackrest','anydbver deploy minio:docker-image node1 pg pgbackrest:s3=node0');
+INSERT INTO help_examples VALUES('haproxy-patroni','anydbver deploy ppg:16 patroni:cluster=cluster1 pgbackrest node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest node3 haproxy-patroni:node0,node1,node2 node4 pgbouncer:node3');
 CREATE TABLE download_sites(program varchar(100), url varchar(512), pattern varchar(100), osver varchar(100), arch varchar(100), repo_file varchar(1024), repo_str varchar(1024));
 INSERT INTO download_sites VALUES('postgresql','https://apt-archive.postgresql.org/pub/repos/apt/dists/jammy-pgdg-archive/main/binary-amd64/Packages','^postgresql-[0-9.]+$','jammy','x86_64','/etc/apt/sources.d/pgdg-archive.list','deb https://apt-archive.postgresql.org/pub/repos/apt jammy-pgdg-archive main');
 INSERT INTO download_sites VALUES('postgresql','https://apt-archive.postgresql.org/pub/repos/apt/dists/noble-pgdg-archive/main/binary-amd64/Packages','^postgresql-[0-9.]+$','noble','x86_64','/etc/apt/sources.d/pgdg-archive.list','deb https://apt-archive.postgresql.org/pub/repos/apt noble-pgdg-archive main');
