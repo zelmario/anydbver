@@ -7,7 +7,7 @@ const (
 	IMAGE_PUBLISHER  = "zelmar"
 )
 
-var RELEASE_VERSION = "0.1.23"
+var RELEASE_VERSION = "0.1.30"
 
 func GetDockerImageName(osver string, user string) string {
 	platform_tag := ""

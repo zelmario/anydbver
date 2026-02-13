@@ -2,7 +2,7 @@
 # docker images --format "{{.Repository}}:{{.Tag}}" | grep -w "0.1.23"|xargs -n 1 docker push
 PLATFORM=linux/amd64
 IMAGE_PUBLISHER=zelmar
-IMAGE_VERSION="0.1.23"
+IMAGE_VERSION="0.1.30"
 PLATFORM_TAG=""
 if uname -m | egrep -q 'aarch64|arm64'; then
   PLATFORM=linux/arm64
