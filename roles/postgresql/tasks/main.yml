@@ -39,6 +39,16 @@
     state: present
     disable_gpg_check: yes
 
+# Workaround for PGDG GPG key rotations: their repo RPM sets repo_gpgcheck=1
+# but the bundled key can lag behind the key used to sign current repomd.xml,
+# causing "Bad GPG signature" errors on dnf metadata refresh.
+- name: Disable repo_gpgcheck on PGDG repos
+  when: postgresql_version != '' and (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
+  ansible.builtin.replace:
+    path: /etc/yum.repos.d/pgdg-redhat-all.repo
+    regexp: '^(repo_gpgcheck|gpgcheck)\s*=\s*1\s*$'
+    replace: '\1 = 0'
+
 - name: Add PGDG 9.5 repo
   when: postgresql_version.startswith('9.5') and (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
   blockinfile:
