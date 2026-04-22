@@ -1376,7 +1376,7 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 	env := map[string]string{}
 	errMsg := "Error running Ansible"
 	ignoreMsg := regexp.MustCompile("ignore this")
-	ansible_output, err := runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, 600)
+	ansible_output, err := runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, 1200)
 	if err != nil {
 		logger.Println("Ansible failed with errors: ")
 		fatalPattern := regexp.MustCompile(`FAILED[!]|failed=`)

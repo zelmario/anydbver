@@ -64,8 +64,13 @@ package_info: >
   else "" }}
 
 
-percona_backup_mongodb_pkg: >
+percona_backup_mongodb_info: >
   {{ lookup("theredgreek.sqlite.sqlite", path=playbook_dir+"/anydbver_version.db",
-    select="select packages from percona_backup_mongodb_version where version like '"+ pbm_version +"%' and os='"+ dist  +"' and arch='"+ansible_architecture +"' ORDER BY CAST(SUBSTR(version,1,INSTR(version,'.')-1) as integer) DESC, CAST(SUBSTR(version,INSTR(version,'.')+1, INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')-1 ) AS INTEGER) DESC, CAST( SUBSTR(version, INSTR(version,'.')+1+ INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')  ) AS INTEGER) DESC LIMIT 1")["packages"]
+    select="select version, os from percona_backup_mongodb_version where version like '"+ pbm_version +"%' and os='"+ dist  +"' and arch='"+ansible_architecture +"' ORDER BY CAST(SUBSTR(version,1,INSTR(version,'.')-1) as integer) DESC, CAST(SUBSTR(version,INSTR(version,'.')+1, INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')-1 ) AS INTEGER) DESC, CAST( SUBSTR(version, INSTR(version,'.')+1+ INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')  ) AS INTEGER) DESC LIMIT 1")
   if pbm_version != ""
+  else "" }}
+
+percona_backup_mongodb_ver: >
+  {{ percona_backup_mongodb_info['version'] + '.' + percona_backup_mongodb_info['os'] + '.' + ansible_architecture
+  if percona_backup_mongodb_info
   else "" }}

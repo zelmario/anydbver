@@ -17,7 +17,7 @@ systemctl start mongos
 MONGO=/usr/bin/mongo;
 test -f $MONGO || MONGO=/usr/bin/mongosh;
 
-until $MONGO --eval 'print("waited for connection")' &>/dev/null ; do sleep 2 ; done
+until $MONGO --eval 'print("waited for connection")' &>/dev/null ; do systemctl start mongos &>/dev/null; sleep 2 ; done
 
 FULL_NEW_SEP=$(echo "$SHARDSRV"|sed -re 's|,([^/^,]+/)|;\1|g')
 OLDIFS="$IFS"

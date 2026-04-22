@@ -55,10 +55,16 @@
     state: present
 
 
+- name: enable repo Percona Backup for MongoDB
+  when: pbm_version != ""
+  command:
+    cmd: /usr/bin/percona-release enable pbm release
+    creates: "/etc/yum.repos.d/percona-pbm-release.repo"
+
 - name: install Percona Backup for MongoDB
   when: pbm_version != ""
   yum:
-    name: "{{percona_backup_mongodb_pkg}}"
+    name: "percona-backup-mongodb-{{percona_backup_mongodb_ver}}"
     state: present
     disable_gpg_check: yes
 
