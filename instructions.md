@@ -92,13 +92,13 @@ That installs the latest Percona Server for MySQL on node0.
 Two nodes with async replication:
 
 ```sh
-anydbver deploy ps:8.0  node1  ps:8.0,master=node0
+anydbver deploy ps:8.4  node1  ps:8.4,master=node0
 ```
 
 Reading left to right:
-1. On node0: install `ps` (Percona Server), version `8.0`.
+1. On node0: install `ps` (Percona Server), version `8.4`.
 2. Switch to `node1`.
-3. On node1: install `ps` version `8.0`, with option `master=node0`
+3. On node1: install `ps` version `8.4`, with option `master=node0`
    (i.e. be a replica of node0).
 
 ---
@@ -110,29 +110,31 @@ Reading left to right:
 anydbver deploy ps
 
 # Single node, specific PostgreSQL version
-anydbver deploy pg:16
+anydbver deploy pg:18
 
 # Two nodes — MySQL source + replica
-anydbver deploy ps:8.0  node1  ps:8.0,master=node0
+anydbver deploy ps:8.4  node1  ps:8.4,master=node0
 
-# Three-node PXC Galera cluster
-anydbver deploy pxc  node1 pxc:latest,master=node0,galera  node2 pxc:latest,master=node0,galera
+# Three-node PXC 8.4 Galera cluster
+anydbver deploy pxc:8.4 \
+  node1 pxc:8.4,master=node0,galera \
+  node2 pxc:8.4,master=node0,galera
 
-# Three-node PSMDB replica set
-anydbver deploy psmdb:latest,replica-set=rs0 \
-  node1 psmdb:latest,replica-set=rs0,master=node0 \
-  node2 psmdb:latest,replica-set=rs0,master=node0
+# Three-node PSMDB 8.0 replica set
+anydbver deploy psmdb:8.0,replica-set=rs0 \
+  node1 psmdb:8.0,replica-set=rs0,master=node0 \
+  node2 psmdb:8.0,replica-set=rs0,master=node0
 
-# PostgreSQL + Patroni + pgbackrest (two nodes)
-anydbver deploy ppg:16 patroni:cluster=cluster1 pgbackrest \
-  node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest
+# Percona PostgreSQL 17 + Patroni + pgbackrest (two nodes)
+anydbver deploy ppg:17 patroni:cluster=cluster1 pgbackrest \
+  node1 ppg:17,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest
 
-# PMM server + monitored MySQL node
-anydbver deploy pmm:2.42.0,docker-image,port=12443 \
-  node1 ps:latest pmm-client:2.42.0-6,server=node0
+# PMM 3.7 server + monitored Percona Server node
+anydbver deploy pmm:3.7.0,docker-image,port=12443 \
+  node1 ps:latest pmm-client:3.7.0-7,server=node0:8443
 
 # PXC operator on k3d
-anydbver deploy k3d k8s-pxc:1.13.0
+anydbver deploy k3d k8s-pxc:1.17.0
 
 # List running nodes, then destroy everything
 anydbver list
@@ -234,17 +236,18 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 Four forms, in order of specificity:
 
 ```sh
-anydbver deploy ps           # latest supported major
+anydbver deploy ps           # latest supported major (currently 8.4)
 anydbver deploy ps:latest    # same as above — explicit
-anydbver deploy ps:8.0       # latest 8.0.x
-anydbver deploy ps:8.0.29    # exact version
+anydbver deploy ps:8.4       # latest 8.4.x
+anydbver deploy ps:8.4.5     # exact version
+anydbver deploy ps:8.0       # latest 8.0.x (previous LTS)
 ```
 
 - The mapping from short version → concrete package version lives in
   `anydbver_version.sql` (compiled into `~/.config/anydbver/anydbver_version.db`).
 - Run `anydbver update` to refresh the local version DB from GitHub master.
 - For PMM client specifically, the version also carries a release suffix:
-  `pmm-client:2.42.0-6`.
+  `pmm-client:3.7.0-7`.
 
 When you want an unmodified upstream container instead of package-based
 install, use [docker-image mode](#docker-image-mode).
@@ -256,10 +259,11 @@ install, use [docker-image mode](#docker-image-mode).
 Add `os:<name>` as a node item to change the base OS for that node:
 
 ```sh
-anydbver deploy os:el8 ps         # Percona Server 8.x on Rocky Linux 8
-anydbver deploy os:el9 pg:16      # PostgreSQL 16 on Rocky Linux 9
+anydbver deploy os:el8 ps         # Percona Server (latest) on Rocky Linux 8
+anydbver deploy os:el9 pg:18      # PostgreSQL 18 on Rocky Linux 9
+anydbver deploy os:el10 pg:18     # PostgreSQL 18 on Rocky Linux 10
 anydbver deploy os:jammy kerberos # Kerberos KDC on Ubuntu Jammy
-anydbver deploy os:el7 ppg:13.5   # Percona PG 13.5 on CentOS 7
+anydbver deploy os:el8 ppg:17     # Percona PG 17 on Rocky Linux 8
 ```
 
 Common OS keywords: `el7`, `el8`, `el9`, `el10` (RHEL/Rocky family),
@@ -388,20 +392,21 @@ existing one).
 ### MySQL / Percona Server / MariaDB
 
 ```sh
-# Standalone (documented in README "Software version specification")
-anydbver deploy ps
-anydbver deploy ps:latest
-anydbver deploy ps:8.0
-anydbver deploy ps:8.0.29
+# Standalone
+anydbver deploy ps              # latest (Percona Server 8.4)
+anydbver deploy ps:8.4          # latest 8.4.x
+anydbver deploy ps:8.4.5        # exact version
+anydbver deploy mysql:8.4       # Oracle MySQL 8.4 LTS
+anydbver deploy mariadb:11.4    # MariaDB 11.4 LTS
 
-# Async replication (source + replica) — CLI help example
-anydbver deploy ps:5.7.35  node1 ps:5.7.35,master=node0
+# Async replication (source + replica) — Percona Server 8.4
+anydbver deploy ps:8.4  node1 ps:8.4,master=node0
 
 # Same pattern for Oracle MySQL, explicit OS
-anydbver deploy mysql:5.7.35 os:el7  node1 mysql:5.7.35,master=node0 os:el7
+anydbver deploy mysql:8.4 os:el9  node1 mysql:8.4,master=node0 os:el9
 
 # Async replication without GTID
-anydbver deploy ps:8.0,nogtid  node1 ps:8.0,nogtid,master=node0
+anydbver deploy ps:8.4,nogtid  node1 ps:8.4,nogtid,master=node0
 
 # Expose MySQL on the host (port 3306)
 anydbver deploy ps:latest,expose=3306
@@ -410,46 +415,47 @@ anydbver deploy ps:latest,expose=3306
 ### Percona XtraDB Cluster (Galera)
 
 ```sh
-# 3-node PXC (latest)
-anydbver deploy pxc \
-  node1 pxc:latest,master=node0,galera \
-  node2 pxc:latest,master=node0,galera
+# 3-node PXC 8.4
+anydbver deploy pxc:8.4 \
+  node1 pxc:8.4,master=node0,galera \
+  node2 pxc:8.4,master=node0,galera
 
-# 3-node PXC 5.7 — galera members chained via node1
-anydbver deploy pxc:5.7 \
-  node1 pxc:5.7,master=node0 \
-  node2 pxc:5.7,master=node1,galera \
-  node3 pxc:5.7,master=node1,galera
+# 3-node PXC 8.0 — galera members chained via node1
+anydbver deploy pxc:8.0 \
+  node1 pxc:8.0,master=node0 \
+  node2 pxc:8.0,master=node1,galera \
+  node3 pxc:8.0,master=node1,galera
 
 # 3-node MariaDB Galera
-anydbver deploy mariadb:latest,galera \
-  node1 mariadb:latest,master=node0,galera \
-  node2 mariadb:latest,master=node0,galera
+anydbver deploy mariadb:11.4,galera \
+  node1 mariadb:11.4,master=node0,galera \
+  node2 mariadb:11.4,master=node0,galera
 ```
 
 ### MySQL Group Replication + Router
 
 ```sh
 anydbver deploy \
-  node0 ps:8.0,group-replication \
-  node1 ps:8.0,group-replication,master=node0 \
-  node2 ps:8.0,mysql-router,master=node0
+  node0 ps:8.4,group-replication \
+  node1 ps:8.4,group-replication,master=node0 \
+  node2 ps:8.4,mysql-router,master=node0
 ```
 
 ### MySQL with Orchestrator / ProxySQL / Xtrabackup
 
 ```sh
 # ProxySQL in front of a source+replica pair
-anydbver deploy ps:5.7  node1 ps:5.7,master=node0  node2 percona-proxysql:latest,master=node0
+anydbver deploy ps:8.4  node1 ps:8.4,master=node0  node2 percona-proxysql:latest,master=node0
 
 # MySQL Orchestrator watching a 3-node chain
 anydbver deploy \
-  ps:5.7 \
-  node1 ps:5.7,master=node0 \
-  node2 ps:5.7,master=node1 \
+  ps:8.4 \
+  node1 ps:8.4,master=node0 \
+  node2 ps:8.4,master=node1 \
   node3 percona-orchestrator:latest,master=node0
 
-# Load a SQL dump into a fresh PS 8.0 and install xtrabackup
+# Load a SQL dump into a fresh PS 8.0 and install xtrabackup 8.0
+# (PS 8.0 + PXB 8.0 are paired — PXB 8.0 backs up PS 8.0)
 anydbver deploy \
   ps:8.0,rocksdb,sql=http://user:pass@172.17.0.1:9000/sampledb/world.sql \
   percona-xtrabackup:8.0
@@ -458,14 +464,14 @@ anydbver deploy \
 ### PostgreSQL replication
 
 ```sh
-# Streaming replication
-anydbver deploy node0 pg:latest,wal=logical \
-  node1 pg:latest,primary=node0,wal=logical
+# Streaming replication (PostgreSQL 18)
+anydbver deploy node0 pg:18,wal=logical \
+  node1 pg:18,primary=node0,wal=logical
 
-# PostgreSQL + repmgr (3 nodes)
-anydbver deploy pg:16 repmgr \
-  node1 pg:16,master=node0 repmgr \
-  node2 pg:16,master=node0 repmgr
+# PostgreSQL 18 + repmgr (3 nodes)
+anydbver deploy pg:18 repmgr \
+  node1 pg:18,master=node0 repmgr \
+  node2 pg:18,master=node0 repmgr
 ```
 
 ### PostgreSQL HA with Patroni / repmgr / HAProxy
@@ -488,21 +494,21 @@ anydbver deploy pgbouncer:node1,node2,node3 \
   node2 pg:master=node1 \
   node3 pg:master=node1
 
-# Full stack: Percona PG + Patroni + pgbackrest (3 nodes) + HAProxy + pgbouncer
+# Full stack: Percona PG 17 + Patroni + pgbackrest (3 nodes) + HAProxy + pgbouncer
 anydbver deploy \
-  ppg:16 patroni:cluster=cluster1 pgbackrest \
-  node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest \
-  node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest \
+  ppg:17 patroni:cluster=cluster1 pgbackrest \
+  node1 ppg:17,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest \
+  node2 ppg:17,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest \
   node3 haproxy-patroni:node0,node1,node2 \
   node4 pgbouncer:node3
 
-# Primary Patroni cluster + a standby Patroni cluster
+# Primary Patroni cluster + a standby Patroni cluster (Percona PG 17)
 anydbver deploy \
-  ppg:16 patroni:cluster=cluster11 \
-  node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster11 \
-  node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster11 \
-  node3 ppg:16 patroni:standby=node0,cluster=cluster12 \
-  node4 ppg:16,master=node3 patroni:master=node3,cluster=cluster12
+  ppg:17 patroni:cluster=cluster11 \
+  node1 ppg:17,master=node0 patroni:master=node0,cluster=cluster11 \
+  node2 ppg:17,master=node0 patroni:master=node0,cluster=cluster11 \
+  node3 ppg:17 patroni:standby=node0,cluster=cluster12 \
+  node4 ppg:17,master=node3 patroni:master=node3,cluster=cluster12
 ```
 
 ### PostgreSQL backups with Barman
@@ -524,34 +530,35 @@ anydbver deploy pg  node1 barman:source=node0,method=streaming-only pg
 # Single PSMDB + Percona Backup for MongoDB (no replica set)
 anydbver deploy node0 psmdb pbm
 
-# 3-node replica set backed up to a MinIO on node0
+# 3-node PSMDB 8.0 replica set backed up to a MinIO on node0
 anydbver deploy minio:docker-image \
-  node1 psmdb:latest,replica-set=rs0                    pbm:latest,s3=node0/backup \
-  node2 psmdb:latest,replica-set=rs0,master=node1       pbm:latest,s3=node0/backup \
-  node3 psmdb:latest,replica-set=rs0,master=node1       pbm:latest,s3=node0/backup
+  node1 psmdb:8.0,replica-set=rs0                    pbm:latest,s3=node0/backup \
+  node2 psmdb:8.0,replica-set=rs0,master=node1       pbm:latest,s3=node0/backup \
+  node3 psmdb:8.0,replica-set=rs0,master=node1       pbm:latest,s3=node0/backup
 
-# PSMDB 5.0 authenticating against an LDAP server on node0
-anydbver deploy ldap node1 ldap-master:default psmdb:5.0
+# PSMDB 8.0 authenticating against an LDAP server on node0
+anydbver deploy ldap node1 ldap-master:default psmdb:8.0
 ```
 
 ### MongoDB sharded cluster
 
 A full sharded cluster needs shards (each a replica set), config servers
-(replica set), and one or more `mongos` routers. The verbatim 2-shard
-example from `anydbver deploy help percona-server-mongodb`:
+(replica set), and one or more `mongos` routers. Same shape as the
+`anydbver deploy help percona-server-mongodb` 2-shard example, with the
+version bumped to PSMDB 8.0:
 
 ```sh
 anydbver deploy \
-  psmdb:4.2,replica-set=rs0,role=shard \
-  node1 psmdb:4.2,replica-set=rs0,role=shard,master=node0 \
-  node2 psmdb:4.2,replica-set=rs0,role=shard,master=node0 \
-  node3 psmdb:4.2,replica-set=rs1,role=shard \
-  node4 psmdb:4.2,replica-set=rs1,role=shard,master=node3 \
-  node5 psmdb:4.2,replica-set=rs1,role=shard,master=node3 \
-  node6 psmdb:4.2,replica-set=cfg0,role=cfg \
-  node7 psmdb:4.2,replica-set=cfg0,role=cfg,master=node6 \
-  node8 psmdb:4.2,replica-set=cfg0,role=cfg,master=node6 \
-  node9 psmdb:4.2 \
+  psmdb:8.0,replica-set=rs0,role=shard \
+  node1 psmdb:8.0,replica-set=rs0,role=shard,master=node0 \
+  node2 psmdb:8.0,replica-set=rs0,role=shard,master=node0 \
+  node3 psmdb:8.0,replica-set=rs1,role=shard \
+  node4 psmdb:8.0,replica-set=rs1,role=shard,master=node3 \
+  node5 psmdb:8.0,replica-set=rs1,role=shard,master=node3 \
+  node6 psmdb:8.0,replica-set=cfg0,role=cfg \
+  node7 psmdb:8.0,replica-set=cfg0,role=cfg,master=node6 \
+  node8 psmdb:8.0,replica-set=cfg0,role=cfg,master=node6 \
+  node9 psmdb:8.0 \
         mongos-cfg:cfg0/node6,node7,node8 \
         mongos-shard:rs0/node0,node1,node2,rs1/node3,node4,node5
 ```
@@ -564,28 +571,32 @@ documented example — see the `pbm`-augmented 9-node command in
 ### Backups (pgbackrest, PBM, MinIO)
 
 ```sh
-# PostgreSQL backed up to MinIO via pgbackrest
-anydbver deploy minio:docker-image  node1 pg pgbackrest:s3=node0
+# PostgreSQL 18 backed up to MinIO via pgbackrest
+anydbver deploy minio:docker-image  node1 pg:18 pgbackrest:s3=node0
 
-# PSMDB replica set backed up via PBM to MinIO
+# PSMDB 8.0 replica set backed up via PBM to MinIO
 anydbver deploy \
   minio:docker-image \
-  node1 psmdb:latest,replica-set=rs0                    pbm:latest,s3=node0/backup \
-  node2 psmdb:latest,replica-set=rs0,master=node1       pbm:latest,s3=node0/backup
+  node1 psmdb:8.0,replica-set=rs0                    pbm:latest,s3=node0/backup \
+  node2 psmdb:8.0,replica-set=rs0,master=node1       pbm:latest,s3=node0/backup
 ```
 
 ### PMM (monitoring)
 
 ```sh
-# PMM 2.x server + PS nodes with PMM client
-anydbver deploy pmm:2.42.0,docker-image,port=12443 \
-  node1 ps:latest,group-replication pmm-client:2.42.0-6,server=node0 \
-  node2 ps:latest,group-replication,master=node1 pmm-client:2.42.0-6,server=node0 \
-  node3 ps:latest,group-replication,master=node1 pmm-client:2.42.0-6,server=node0
+# PMM 3.7 server + 3-node group-replication cluster with PMM client
+anydbver deploy pmm:3.7.0,docker-image,port=12443 \
+  node1 ps:latest,group-replication pmm-client:3.7.0-7,server=node0:8443 \
+  node2 ps:latest,group-replication,master=node1 pmm-client:3.7.0-7,server=node0:8443 \
+  node3 ps:latest,group-replication,master=node1 pmm-client:3.7.0-7,server=node0:8443
 
-# PMM 3.x server — note the explicit :8443 in server=node0:8443
-anydbver deploy pmm:3.3.1,docker-image,port=12443 \
-  node1 ps:latest pmm-client:3.3.1-7,server=node0:8443
+# Minimal PMM 3.7: server + one monitored node
+anydbver deploy pmm:3.7.0,docker-image,port=12443 \
+  node1 ps:latest pmm-client:3.7.0-7,server=node0:8443
+
+# PMM 2.x is still supported for legacy deployments (port 443 inside)
+anydbver deploy pmm:2.42.0,docker-image,port=12443 \
+  node1 ps:latest pmm-client:2.42.0-6,server=node0
 
 # PMM using dev/nightly images
 anydbver deploy \
@@ -604,44 +615,44 @@ anydbver deploy \
 ### Kubernetes operators (k3d)
 
 ```sh
-# Percona XtraDB Cluster operator
-anydbver deploy k3d k8s-pxc:1.13.0
+# Percona XtraDB Cluster operator 1.17
+anydbver deploy k3d k8s-pxc:1.17.0
 
 # PXC operator on a cluster that also has MinIO for backups
-anydbver deploy k8s-minio k8s-pxc:1.13.0
+anydbver deploy k8s-minio k8s-pxc:1.17.0
 
-# MySQL operator
-anydbver deploy k3d k8s-ps:0.7.0
+# MySQL operator 0.10
+anydbver deploy k3d k8s-ps:0.10.0
 
-# Percona PostgreSQL operator
-anydbver deploy k3d cert-manager:1.7.2 k8s-pg:2.3.1
+# Percona PostgreSQL operator 2.7
+anydbver deploy k3d cert-manager:1.14.2 k8s-pg:2.7.0
 
 # PG operator with a primary cluster + standby cluster in another namespace
 anydbver deploy k3d k8s-minio:latest,certs=self-signed cert-manager \
-  k8s-pg:2.4.1 \
-  k8s-pg:2.4.1,namespace=pgo1,standby
+  k8s-pg:2.7.0 \
+  k8s-pg:2.7.0,namespace=pgo1,standby
 
 # PG operator installed via Helm
 anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local \
   cert-manager:1.14.2 \
-  k8s-pg:2.4.0,cluster-name=db1,helm
+  k8s-pg:2.7.0,cluster-name=db1,helm
 
-# PG operator pinned to DB major version 13
-anydbver deploy k8s-pg:2.2.0,db-version=13
+# PG operator pinned to DB major version 16
+anydbver deploy k8s-pg:2.7.0,db-version=16
 
-# PSMDB operator with custom cluster domain
+# PSMDB operator 1.20 with custom cluster domain
 anydbver deploy \
   k3d:v1.25.16-k3s4,cluster-domain=percona.local \
   cert-manager:1.14.2 \
-  k8s-psmdb:1.16.2,replicas=1,shards=0,namespace=db1
+  k8s-psmdb:1.20.1,replicas=1,shards=0,namespace=db1
 
 # Multiple PSMDB namespaces behind one ingress
 anydbver deploy \
   k3d:latest,ingress=443,ingress-type=nginxinc,nodes=3,host-alias="172.17.0.1:r1.percona.local|r2.percona.local|r3.percona.local" \
   cert-manager \
-  k8s-psmdb:1.16.2,replicas=1,shards=0,namespace=db1 \
-  k8s-psmdb:1.16.2,replicas=1,shards=0,namespace=db2 \
-  k8s-psmdb:1.16.2,replicas=1,shards=0,namespace=db3
+  k8s-psmdb:1.20.1,replicas=1,shards=0,namespace=db1 \
+  k8s-psmdb:1.20.1,replicas=1,shards=0,namespace=db2 \
+  k8s-psmdb:1.20.1,replicas=1,shards=0,namespace=db3
 ```
 
 To drive kubectl/helm yourself against the created cluster:
@@ -653,8 +664,8 @@ anydbver shell    # enters a container with kubectl + helm wired up
 ### LDAP / Kerberos authentication
 
 ```sh
-# PSMDB 5.0 with LDAP auth
-anydbver deploy ldap  node1 ldap-master:default psmdb:5.0
+# PSMDB 8.0 with LDAP auth
+anydbver deploy ldap  node1 ldap-master:default psmdb:8.0
 
 # Kerberos KDC on node0, PSMDB with GSSAPI on node1
 anydbver deploy \
@@ -665,15 +676,15 @@ anydbver deploy \
 ### Benchmarking with sysbench
 
 ```sh
-# Simple: sysbench against a single PS node
-anydbver deploy ps:5.7  node1 sysbench:latest,mysql=node0
+# Simple: sysbench against a single Percona Server 8.4 node
+anydbver deploy ps:8.4  node1 sysbench:latest,mysql=node0
 
 # OLTP R/W against MySQL Router (Group Replication, port 6446)
 anydbver deploy \
-  node0 ps:8.0,group-replication \
-  node1 ps:8.0,group-replication,master=node0 \
-  node2 ps:8.0,mysql-router,master=node0 \
-  node3 ps:8.0 sysbench:latest,mysql=node2,port=6446,oltprw
+  node0 ps:8.4,group-replication \
+  node1 ps:8.4,group-replication,master=node0 \
+  node2 ps:8.4,mysql-router,master=node0 \
+  node3 ps:8.4 sysbench:latest,mysql=node2,port=6446,oltprw
 ```
 
 ---
@@ -714,17 +725,17 @@ container image and reuse it. Two keywords drive this:
 First build the cache, then use it:
 
 ```sh
-# 1) build a cache image called "ps-8.0.22"
-anydbver deploy install ps:8.0.22 cache:ps-8.0.22
+# 1) build a cache image called "ps-8.4.5"
+anydbver deploy install ps:8.4.5 cache:ps-8.4.5
 
 # 2) reuse it across all nodes of a real deployment
 anydbver deploy \
-          install ps:8.0.22 cache:ps-8.0.22 \
-  node1   install ps:8.0.22 cache:ps-8.0.22 \
-  node2   install ps:8.0.22 cache:ps-8.0.22 \
-  default ps:8.0.22 \
-  node1   ps:8.0.22 master:default \
-  node2   ps:8.0.22 master:default
+          install ps:8.4.5 cache:ps-8.4.5 \
+  node1   install ps:8.4.5 cache:ps-8.4.5 \
+  node2   install ps:8.4.5 cache:ps-8.4.5 \
+  default ps:8.4.5 \
+  node1   ps:8.4.5 master:default \
+  node2   ps:8.4.5 master:default
 ```
 
 Supported with `install`: MySQL, Percona Server, PSMDB, MariaDB,
@@ -766,7 +777,7 @@ Give an environment a name so it can coexist with another:
 
 ```sh
 anydbver --namespace=ns1 deploy ps:8.0
-anydbver --namespace=ns2 deploy pg:16
+anydbver --namespace=ns2 deploy pg:18
 anydbver namespace list
 anydbver --namespace=ns1 destroy
 ```
