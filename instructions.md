@@ -22,8 +22,10 @@ If you only read one section, read [Command Anatomy](#command-anatomy) and
    - [MySQL / Percona Server / MariaDB](#mysql--percona-server--mariadb)
    - [Percona XtraDB Cluster (Galera)](#percona-xtradb-cluster-galera)
    - [MySQL Group Replication + Router](#mysql-group-replication--router)
+   - [MySQL with Orchestrator / ProxySQL / Xtrabackup](#mysql-with-orchestrator--proxysql--xtrabackup)
    - [PostgreSQL replication](#postgresql-replication)
    - [PostgreSQL HA with Patroni / repmgr / HAProxy](#postgresql-ha-with-patroni--repmgr--haproxy)
+   - [PostgreSQL backups with Barman](#postgresql-backups-with-barman)
    - [MongoDB / PSMDB replica set](#mongodb--psmdb-replica-set)
    - [MongoDB sharded cluster](#mongodb-sharded-cluster)
    - [Backups (pgbackrest, PBM, MinIO)](#backups-pgbackrest-pbm-minio)
@@ -32,9 +34,10 @@ If you only read one section, read [Command Anatomy](#command-anatomy) and
    - [LDAP / Kerberos authentication](#ldap--kerberos-authentication)
    - [Benchmarking with sysbench](#benchmarking-with-sysbench)
 9. [Docker-image mode](#docker-image-mode)
-10. [Managing the environment](#managing-the-environment)
-11. [Getting help from the CLI](#getting-help-from-the-cli)
-12. [Troubleshooting](#troubleshooting)
+10. [Speeding up deploys with `install` + `cache`](#speeding-up-deploys-with-install--cache)
+11. [Managing the environment](#managing-the-environment)
+12. [Getting help from the CLI](#getting-help-from-the-cli)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -150,16 +153,17 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 
 ### Databases
 
-| Keyword                   | Aliases               | What it is                                |
-|---------------------------|-----------------------|-------------------------------------------|
-| `percona-server`          | `ps`                  | Percona Server for MySQL                  |
-| `percona-xtradb-cluster`  | `pxc`                 | Percona XtraDB Cluster (Galera)           |
-| `mysql`                   |                       | Oracle MySQL Community                    |
-| `mariadb`                 |                       | MariaDB                                   |
-| `postgresql`              | `pg`                  | PostgreSQL from PGDG                      |
-| `percona-postgresql`      | `ppg`                 | Percona Distribution for PostgreSQL       |
-| `percona-server-mongodb`  | `psmdb`               | Percona Server for MongoDB                |
-| `valkey`                  |                       | Valkey (Redis fork)                       |
+| Keyword                   | Aliases                      | What it is                                |
+|---------------------------|------------------------------|-------------------------------------------|
+| `percona-server`          | `ps`, `percona-server-mysql` | Percona Server for MySQL                  |
+| `percona-xtradb-cluster`  | `pxc`                        | Percona XtraDB Cluster (Galera)           |
+| `mysql`                   |                              | Oracle MySQL Community                    |
+| `mariadb`                 |                              | MariaDB                                   |
+| `mydb`                    |                              | MySQL-family variant (same options as `mysql`) |
+| `postgresql`              | `pg`, `postgres`             | PostgreSQL from PGDG                      |
+| `percona-postgresql`      | `ppg`, `percona-postgres`    | Percona Distribution for PostgreSQL       |
+| `percona-server-mongodb`  | `psmdb`                      | Percona Server for MongoDB                |
+| `valkey`                  |                              | Valkey (Redis fork)                       |
 
 ### Replication / HA / proxies
 
@@ -180,13 +184,15 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `pgbackrest`             | PostgreSQL backup tool                           |
 | `barman`                 | PostgreSQL backup manager                        |
 | `percona-backup-mongodb` (alias `pbm`) | MongoDB backup tool                |
+| `percona-xtrabackup`     | Hot backup tool for MySQL / Percona Server       |
 
 ### Monitoring / Observability
 
-| Keyword       | What it is                             |
-|---------------|----------------------------------------|
-| `pmm-server` / `pmm` | Percona Monitoring and Management server |
-| `pmm-client`  | Percona Monitoring and Management agent |
+| Keyword              | Aliases | What it is                              |
+|----------------------|---------|-----------------------------------------|
+| `pmm-server`         | `pmm`   | Percona Monitoring and Management server |
+| `pmm-client`         |         | Percona Monitoring and Management agent |
+| `k8s-pmm`            |         | PMM running inside Kubernetes           |
 
 ### Object storage
 
@@ -269,6 +275,11 @@ The same key often means different things per product — the CLI help is
 the authoritative source (`anydbver deploy help <keyword>`). These are
 the ones you will use most often.
 
+> The authoritative list of options for every product is printed by
+> `anydbver deploy help <keyword>` — consult it when an option below
+> isn't enough. The tables in this section only list options that have
+> a **documented real example** in the CLI or README.
+
 ### Topology (MySQL / Percona Server / MariaDB / PXC)
 
 | Option              | Meaning                                             |
@@ -286,7 +297,8 @@ the ones you will use most often.
 
 | Option              | Meaning                                             |
 |---------------------|-----------------------------------------------------|
-| `master=nodeN` / `primary=nodeN` | Streaming replica of `nodeN`           |
+| `master=nodeN`      | Streaming replica of `nodeN`                        |
+| `primary=nodeN`     | Same as `master=` in PG (either form works)         |
 | `wal=logical`       | Enable logical replication slot                     |
 | `cluster=name`      | Patroni cluster name                                |
 | `standby=nodeN`     | Patroni standby cluster pointing at another cluster |
@@ -343,6 +355,17 @@ the ones you will use most often.
 | `cluster-name=db1`      | Logical cluster name created by the operator       |
 | `db-version=13`         | DB version the operator should provision           |
 | `helm`                  | Install the operator via Helm                      |
+| `standby`               | Create a standby cluster (k8s-pg)                  |
+| `proxysql`              | Enable ProxySQL in the cluster (k8s-pxc)           |
+| `certs=self-signed`     | Use self-signed TLS certificates (k8s-minio)       |
+
+### Valkey
+
+| Option      | Meaning                                                     |
+|-------------|-------------------------------------------------------------|
+| `master=nodeN` | Replicate from `nodeN`                                   |
+| `sentinel`  | Run Valkey Sentinel on this node                            |
+| `cluster=name` | Valkey cluster name                                      |
 
 ### sysbench
 
@@ -356,21 +379,26 @@ the ones you will use most often.
 
 ## Examples by scenario
 
-All commands below are complete — you can copy them verbatim. Before
-running another one, tear down the previous environment with
-`anydbver destroy` (or pass `--keep` to add to the existing one).
+Every command below is a real, documented example — either verbatim from
+`anydbver deploy help <keyword>`, or from `README.md` / `MONGO.md` /
+`CACHING.md`. Before running another one, tear down the previous
+environment with `anydbver destroy` (or pass `--keep` to add to the
+existing one).
 
 ### MySQL / Percona Server / MariaDB
 
 ```sh
-# Standalone
-anydbver deploy ps:5.7
+# Standalone (documented in README "Software version specification")
+anydbver deploy ps
+anydbver deploy ps:latest
 anydbver deploy ps:8.0
-anydbver deploy mysql:5.7.35
-anydbver deploy mariadb:latest
+anydbver deploy ps:8.0.29
 
-# Async replication (source + replica)
+# Async replication (source + replica) — CLI help example
 anydbver deploy ps:5.7.35  node1 ps:5.7.35,master=node0
+
+# Same pattern for Oracle MySQL, explicit OS
+anydbver deploy mysql:5.7.35 os:el7  node1 mysql:5.7.35,master=node0 os:el7
 
 # Async replication without GTID
 anydbver deploy ps:8.0,nogtid  node1 ps:8.0,nogtid,master=node0
@@ -382,10 +410,16 @@ anydbver deploy ps:latest,expose=3306
 ### Percona XtraDB Cluster (Galera)
 
 ```sh
-# 3-node PXC
+# 3-node PXC (latest)
 anydbver deploy pxc \
   node1 pxc:latest,master=node0,galera \
   node2 pxc:latest,master=node0,galera
+
+# 3-node PXC 5.7 — galera members chained via node1
+anydbver deploy pxc:5.7 \
+  node1 pxc:5.7,master=node0 \
+  node2 pxc:5.7,master=node1,galera \
+  node3 pxc:5.7,master=node1,galera
 
 # 3-node MariaDB Galera
 anydbver deploy mariadb:latest,galera \
@@ -400,6 +434,25 @@ anydbver deploy \
   node0 ps:8.0,group-replication \
   node1 ps:8.0,group-replication,master=node0 \
   node2 ps:8.0,mysql-router,master=node0
+```
+
+### MySQL with Orchestrator / ProxySQL / Xtrabackup
+
+```sh
+# ProxySQL in front of a source+replica pair
+anydbver deploy ps:5.7  node1 ps:5.7,master=node0  node2 percona-proxysql:latest,master=node0
+
+# MySQL Orchestrator watching a 3-node chain
+anydbver deploy \
+  ps:5.7 \
+  node1 ps:5.7,master=node0 \
+  node2 ps:5.7,master=node1 \
+  node3 percona-orchestrator:latest,master=node0
+
+# Load a SQL dump into a fresh PS 8.0 and install xtrabackup
+anydbver deploy \
+  ps:8.0,rocksdb,sql=http://user:pass@172.17.0.1:9000/sampledb/world.sql \
+  percona-xtrabackup:8.0
 ```
 
 ### PostgreSQL replication
@@ -418,54 +471,95 @@ anydbver deploy pg:16 repmgr \
 ### PostgreSQL HA with Patroni / repmgr / HAProxy
 
 ```sh
-# Percona PG + Patroni + pgbackrest, 2 nodes
-anydbver deploy \
-  ppg:16 patroni:cluster=cluster1 pgbackrest \
-  node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest
+# Basic 3-node Patroni on vanilla PG
+anydbver deploy pg patroni \
+  node1 pg:master=node0 patroni:master=node0 \
+  node2 pg:master=node0 patroni:master=node0
 
-# Full stack: Patroni (3) + HAProxy + pgbouncer
+# HAProxy-PG load balancer in front of a clustercheck-enabled chain
+anydbver deploy haproxy-pg:node1,node2,node3 \
+  node1 pg:clustercheck \
+  node2 pg:master=node1,clustercheck \
+  node3 pg:master=node1,clustercheck
+
+# pgbouncer in front of a primary + 2 replicas
+anydbver deploy pgbouncer:node1,node2,node3 \
+  node1 pg \
+  node2 pg:master=node1 \
+  node3 pg:master=node1
+
+# Full stack: Percona PG + Patroni + pgbackrest (3 nodes) + HAProxy + pgbouncer
 anydbver deploy \
   ppg:16 patroni:cluster=cluster1 pgbackrest \
-  node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 \
-  node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 \
+  node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest \
+  node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest \
   node3 haproxy-patroni:node0,node1,node2 \
   node4 pgbouncer:node3
+
+# Primary Patroni cluster + a standby Patroni cluster
+anydbver deploy \
+  ppg:16 patroni:cluster=cluster11 \
+  node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster11 \
+  node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster11 \
+  node3 ppg:16 patroni:standby=node0,cluster=cluster12 \
+  node4 ppg:16,master=node3 patroni:master=node3,cluster=cluster12
+```
+
+### PostgreSQL backups with Barman
+
+Barman is a pull-style backup manager for PostgreSQL. It lives on its own
+node and reads from the PG source you point it at.
+
+```sh
+# Default Barman topology: rsync/pg_basebackup from node0
+anydbver deploy pg  node1 barman:source=node0
+
+# Streaming-only (continuous WAL streaming, no rsync)
+anydbver deploy pg  node1 barman:source=node0,method=streaming-only pg
 ```
 
 ### MongoDB / PSMDB replica set
 
 ```sh
-# Standalone
-anydbver deploy psmdb:latest
+# Single PSMDB + Percona Backup for MongoDB (no replica set)
+anydbver deploy node0 psmdb pbm
 
-# 3-node replica set
-anydbver deploy \
-  psmdb:5.0,replica-set=rs0 \
-  node1 psmdb:5.0,replica-set=rs0,master=node0 \
-  node2 psmdb:5.0,replica-set=rs0,master=node0
+# 3-node replica set backed up to a MinIO on node0
+anydbver deploy minio:docker-image \
+  node1 psmdb:latest,replica-set=rs0                    pbm:latest,s3=node0/backup \
+  node2 psmdb:latest,replica-set=rs0,master=node1       pbm:latest,s3=node0/backup \
+  node3 psmdb:latest,replica-set=rs0,master=node1       pbm:latest,s3=node0/backup
+
+# PSMDB 5.0 authenticating against an LDAP server on node0
+anydbver deploy ldap node1 ldap-master:default psmdb:5.0
 ```
 
 ### MongoDB sharded cluster
 
 A full sharded cluster needs shards (each a replica set), config servers
-(replica set), and one or more `mongos` routers. See `MONGO.md` for a
-larger 3-shard example. A compact 2-shard layout:
+(replica set), and one or more `mongos` routers. The verbatim 2-shard
+example from `anydbver deploy help percona-server-mongodb`:
 
 ```sh
 anydbver deploy \
-  node0 psmdb:latest,replica-set=rs0,role=shard \
-  node1 psmdb:latest,replica-set=rs0,role=shard,master=node0 \
-  node2 psmdb:latest,replica-set=rs0,role=shard,master=node0 \
-  node3 psmdb:latest,replica-set=rs1,role=shard \
-  node4 psmdb:latest,replica-set=rs1,role=shard,master=node3 \
-  node5 psmdb:latest,replica-set=rs1,role=shard,master=node3 \
-  node6 psmdb:latest,replica-set=cfg0,role=cfg \
-  node7 psmdb:latest,replica-set=cfg0,role=cfg,master=node6 \
-  node8 psmdb:latest,replica-set=cfg0,role=cfg,master=node6 \
-  node9 psmdb:latest \
+  psmdb:4.2,replica-set=rs0,role=shard \
+  node1 psmdb:4.2,replica-set=rs0,role=shard,master=node0 \
+  node2 psmdb:4.2,replica-set=rs0,role=shard,master=node0 \
+  node3 psmdb:4.2,replica-set=rs1,role=shard \
+  node4 psmdb:4.2,replica-set=rs1,role=shard,master=node3 \
+  node5 psmdb:4.2,replica-set=rs1,role=shard,master=node3 \
+  node6 psmdb:4.2,replica-set=cfg0,role=cfg \
+  node7 psmdb:4.2,replica-set=cfg0,role=cfg,master=node6 \
+  node8 psmdb:4.2,replica-set=cfg0,role=cfg,master=node6 \
+  node9 psmdb:4.2 \
         mongos-cfg:cfg0/node6,node7,node8 \
         mongos-shard:rs0/node0,node1,node2,rs1/node3,node4,node5
 ```
+
+The same layout with `psmdb:latest` and PBM on every node is also a
+documented example — see the `pbm`-augmented 9-node command in
+`anydbver deploy help percona-server-mongodb`. See `MONGO.md` for a
+3-shard variant.
 
 ### Backups (pgbackrest, PBM, MinIO)
 
@@ -489,6 +583,10 @@ anydbver deploy pmm:2.42.0,docker-image,port=12443 \
   node2 ps:latest,group-replication,master=node1 pmm-client:2.42.0-6,server=node0 \
   node3 ps:latest,group-replication,master=node1 pmm-client:2.42.0-6,server=node0
 
+# PMM 3.x server — note the explicit :8443 in server=node0:8443
+anydbver deploy pmm:3.3.1,docker-image,port=12443 \
+  node1 ps:latest pmm-client:3.3.1-7,server=node0:8443
+
 # PMM using dev/nightly images
 anydbver deploy \
   pmm:docker-image=perconalab/pmm-server:dev-latest,port=12443 \
@@ -496,8 +594,12 @@ anydbver deploy \
   node2 pmm-client:docker-image=perconalab/pmm-client:dev-latest,server=node0,mysql=node1
 ```
 
-PMM 3.x uses ports 8443 / 8080 inside the container; pick the host port
-with the `port=` option as shown above. PMM 2.x uses 443.
+- PMM 2.x listens on port **443** inside the container — `server=node0`
+  is enough.
+- PMM 3.x listens on **8443** (HTTPS) / **8080** (HTTP) inside the
+  container — the client needs `server=node0:8443`.
+- In both cases, pick the **host** port for the UI with `port=12443`
+  (or any free port).
 
 ### Kubernetes operators (k3d)
 
@@ -505,8 +607,27 @@ with the `port=` option as shown above. PMM 2.x uses 443.
 # Percona XtraDB Cluster operator
 anydbver deploy k3d k8s-pxc:1.13.0
 
+# PXC operator on a cluster that also has MinIO for backups
+anydbver deploy k8s-minio k8s-pxc:1.13.0
+
+# MySQL operator
+anydbver deploy k3d k8s-ps:0.7.0
+
 # Percona PostgreSQL operator
 anydbver deploy k3d cert-manager:1.7.2 k8s-pg:2.3.1
+
+# PG operator with a primary cluster + standby cluster in another namespace
+anydbver deploy k3d k8s-minio:latest,certs=self-signed cert-manager \
+  k8s-pg:2.4.1 \
+  k8s-pg:2.4.1,namespace=pgo1,standby
+
+# PG operator installed via Helm
+anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local \
+  cert-manager:1.14.2 \
+  k8s-pg:2.4.0,cluster-name=db1,helm
+
+# PG operator pinned to DB major version 13
+anydbver deploy k8s-pg:2.2.0,db-version=13
 
 # PSMDB operator with custom cluster domain
 anydbver deploy \
@@ -580,6 +701,39 @@ PMM, PMM client.
 
 ---
 
+## Speeding up deploys with `install` + `cache`
+
+For repeated deployments of the same software stack you can pre-bake a
+container image and reuse it. Two keywords drive this:
+
+- `install <product>` — run the install steps only, do **not** start/
+  configure the service.
+- `cache:<name>` — the name of the baked image to create (on the first
+  deploy) or reuse (on subsequent deploys).
+
+First build the cache, then use it:
+
+```sh
+# 1) build a cache image called "ps-8.0.22"
+anydbver deploy install ps:8.0.22 cache:ps-8.0.22
+
+# 2) reuse it across all nodes of a real deployment
+anydbver deploy \
+          install ps:8.0.22 cache:ps-8.0.22 \
+  node1   install ps:8.0.22 cache:ps-8.0.22 \
+  node2   install ps:8.0.22 cache:ps-8.0.22 \
+  default ps:8.0.22 \
+  node1   ps:8.0.22 master:default \
+  node2   ps:8.0.22 master:default
+```
+
+Supported with `install`: MySQL, Percona Server, PSMDB, MariaDB,
+PostgreSQL, Patroni, PMM, Samba, k3s. See `CACHING.md` for the full
+story (including an optional local nginx proxy cache for package
+downloads).
+
+---
+
 ## Managing the environment
 
 ```sh
@@ -594,12 +748,16 @@ anydbver destroy --remove-cache         # and wipe the cache images too
 
 ### Adding to an existing deployment
 
-Without `--keep`, a new `deploy` tears down the previous one first.
-With `--keep`, the new node is added:
+Without `--keep`, a new `deploy` tears down the previous one first
+(this is intentional — anydbver treats a fresh invocation as a fresh
+topology).
+
+With `--keep`, the new node is added on top of the existing one:
 
 ```sh
 anydbver deploy node0 ps
 anydbver deploy --keep node1 ps:master=node0
+# node1 is now a replica of node0; node0 was left running
 ```
 
 ### Namespaces (parallel environments)
