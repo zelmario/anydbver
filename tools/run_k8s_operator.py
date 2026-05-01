@@ -226,7 +226,7 @@ def run_pg_operator(ns, op, db_ver, cluster_name, op_ver, standby, backup_type, 
         set_yaml('.spec.pgReplicas.hotStandby.size={replicas}'.format(
             replicas=db_replicas), "Change number of replicas")
     if db_replicas and op_ver.startswith("2"):
-        set_yaml('.spec.instances[0].replicas={replicas}'.format(replicas=int(db_replicas)+1),
+        set_yaml('.spec.instances[0].replicas={replicas}'.format(replicas=int(db_replicas)),
                  "Change number of replicas")
 
     if backup_type == "gcs":
