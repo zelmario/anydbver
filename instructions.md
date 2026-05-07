@@ -32,6 +32,7 @@ If you only read one section, read [Command Anatomy](#command-anatomy) and
    - [PMM (monitoring)](#pmm-monitoring)
    - [Kubernetes operators (k3d)](#kubernetes-operators-k3d)
    - [LDAP / Kerberos authentication](#ldap--kerberos-authentication)
+   - [Shared storage with NFS](#shared-storage-with-nfs)
    - [Benchmarking with sysbench](#benchmarking-with-sysbench)
 9. [Docker-image mode](#docker-image-mode)
 10. [Speeding up deploys with `install` + `cache`](#speeding-up-deploys-with-install--cache)
@@ -202,6 +203,13 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 |---------------|----------------------------------------|
 | `minio`       | MinIO S3-compatible storage            |
 | `k8s-minio`   | MinIO inside Kubernetes                |
+
+### Shared filesystem
+
+| Keyword        | Aliases | What it is                                          |
+|----------------|---------|-----------------------------------------------------|
+| `nfs-server`   | `nfs`   | NFSv4 server exporting `/srv/nfs` (tmpfs-backed)    |
+| `nfs-client`   |         | Mount the export at `/mnt/nfs` (or `mount=/path`)   |
 
 ### Auth / directory
 
@@ -672,6 +680,31 @@ anydbver deploy \
   node0 os:jammy kerberos \
   node1 os:el8 psmdb:latest,kerberos-server=node0
 ```
+
+### Shared storage with NFS
+
+The `nfs-server` keyword turns a node into a kernel NFSv4 server exporting
+`/srv/nfs` (backed by tmpfs inside the container). `nfs-client:server=nodeN`
+mounts that export at `/mnt/nfs`.
+
+```sh
+# Smallest working example: NFS server on node0, Postgres on node1 with the share mounted.
+anydbver deploy nfs node1 pg nfs-client:server=node0
+
+# Custom mount point on the client.
+anydbver deploy nfs node1 pg nfs-client:server=node0,mount=/data/shared
+
+# Patroni cluster sharing a pgbackrest repo over NFS.
+anydbver deploy nfs \
+  node1 pg patroni pgbackrest:repo=/mnt/nfs/pgbackrest nfs-client:server=node0 \
+  node2 pg:master=node1 patroni:master=node1 pgbackrest:repo=/mnt/nfs/pgbackrest nfs-client:server=node0 \
+  node3 pg:master=node1 patroni:master=node1 pgbackrest:repo=/mnt/nfs/pgbackrest nfs-client:server=node0
+```
+
+Notes:
+- NFSv4 only — v2/v3 are disabled on the server, so `showmount` won't work; use `exportfs -v`.
+- The export is tmpfs-backed (overlayfs cannot be NFS-exported). Data is **ephemeral** — destroyed with the container.
+- Tear down clients before the server: a client whose server vanishes can leave a stuck mount that wedges `anydbver destroy`. If that happens, `sudo systemctl restart docker` clears it.
 
 ### Benchmarking with sysbench
 

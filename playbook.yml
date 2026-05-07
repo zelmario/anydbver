@@ -136,6 +136,10 @@
     kerberos_client: "{{ lookup('vars', 'extra_kerberos_client', default=lookup('env','KERBEROS_CLIENT',default='') ) }}"
     kerberos_samba: "{{ lookup('vars', 'extra_kerberos_samba', default='') }}"
     kerberos_samba_ip: "{{ lookup('vars', 'extra_kerberos_samba_ip', default='') }}"
+    nfs_server: "{{ lookup('vars', 'extra_nfs_server', default='') }}"
+    nfs_client: "{{ lookup('vars', 'extra_nfs_client', default='') }}"
+    nfs_client_server: "{{ lookup('vars', 'extra_nfs_client_server', default='') }}"
+    nfs_client_mount: "{{ lookup('vars', 'extra_nfs_client_mount', default='/mnt/nfs') }}"
     mydumper_version: "{{ lookup('vars', 'extra_mydumper_version', default=lookup('env','MYDUMPER',default='') ) }}"
     postgresql_version: "{{ lookup('vars', 'extra_postgresql_version', default=lookup('env','PG',default='') ) | string }}"
     postgresql_version2: "{{ lookup('vars', 'extra_postgresql_version2', default=lookup('env','PG2',default='') ) }}"
@@ -277,6 +281,14 @@
     - name: MinIO client tasks
       when: minio_url != ''
       include_tasks: roles/tools_and_monitoring/tasks/minio-client.yaml
+
+    - name: NFS server tasks
+      when: nfs_server != ''
+      include_tasks: roles/tools_and_monitoring/tasks/nfs-server.yaml
+
+    - name: NFS client tasks
+      when: nfs_client != ''
+      include_tasks: roles/tools_and_monitoring/tasks/nfs-client.yaml
 
     - name: User Security LDAP, PAM, Active Directory, Vault, Kerberos
       when: vault_version != '' or samba_ad != '' or ldap_server != '' or ldap_server_ip != '' or kerberos_server != '' or kerberos_client != '' or kerberos_samba != '' or kmip_server != ''

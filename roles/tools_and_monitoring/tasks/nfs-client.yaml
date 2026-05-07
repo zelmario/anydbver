@@ -1,0 +1,32 @@
+- name: Install NFS client packages (RHEL family)
+  when: ansible_os_family == 'RedHat'
+  ansible.builtin.yum:
+    name: nfs-utils
+    state: present
+
+- name: Install NFS client packages (Debian family)
+  when: ansible_os_family == 'Debian'
+  ansible.builtin.apt:
+    name: nfs-common
+    state: present
+    update_cache: yes
+
+- name: Ensure NFS mount point exists
+  ansible.builtin.file:
+    path: "{{ nfs_client_mount }}"
+    state: directory
+    mode: '0755'
+
+- name: Wait for NFS server port 2049
+  ansible.builtin.wait_for:
+    host: "{{ nfs_client_server }}"
+    port: 2049
+    timeout: 180
+
+- name: Mount NFS export
+  ansible.posix.mount:
+    src: "{{ nfs_client_server }}:/"
+    path: "{{ nfs_client_mount }}"
+    fstype: nfs4
+    opts: "vers=4,soft,_netdev"
+    state: mounted

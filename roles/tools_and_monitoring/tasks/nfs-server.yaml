@@ -1,0 +1,75 @@
+- name: Install NFS server packages (RHEL family)
+  when: ansible_os_family == 'RedHat'
+  ansible.builtin.yum:
+    name: nfs-utils
+    state: present
+
+- name: Install NFS server packages (Debian family)
+  when: ansible_os_family == 'Debian'
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+    update_cache: yes
+
+- name: Create NFS export directory
+  ansible.builtin.file:
+    path: /srv/nfs
+    state: directory
+    mode: '0777'
+
+- name: Mount tmpfs on /srv/nfs (overlayfs cannot be NFS-exported)
+  ansible.builtin.shell:
+    cmd: |
+      if mountpoint -q /srv/nfs; then
+        echo already-mounted
+      else
+        mount -t tmpfs -o size=512m,mode=0777 tmpfs /srv/nfs
+        echo mounted
+      fi
+  register: nfs_tmpfs
+  changed_when: "'mounted' in nfs_tmpfs.stdout and 'already' not in nfs_tmpfs.stdout"
+
+- name: Disable NFSv2/v3 (RHEL family)
+  when: ansible_os_family == 'RedHat'
+  ansible.builtin.lineinfile:
+    path: /etc/nfs.conf
+    regexp: '^#?\s*vers{{ item }}\s*='
+    line: 'vers{{ item }}=n'
+    insertafter: '^\[nfsd\]'
+  loop: [2, 3]
+  register: nfs_conf
+
+- name: Disable NFSv2/v3 (Debian family)
+  when: ansible_os_family == 'Debian'
+  ansible.builtin.lineinfile:
+    path: /etc/default/nfs-kernel-server
+    regexp: '^RPCNFSDOPTS='
+    line: 'RPCNFSDOPTS="-N 2 -N 3"'
+    create: yes
+  register: nfs_default
+
+- name: Write /etc/exports
+  ansible.builtin.copy:
+    dest: /etc/exports
+    content: "/srv/nfs *(rw,sync,no_subtree_check,fsid=0)\n"
+    mode: '0644'
+  register: nfs_exports
+
+- name: Enable and start nfs-server (RHEL family)
+  when: ansible_os_family == 'RedHat'
+  ansible.builtin.systemd:
+    name: nfs-server
+    state: "{{ 'restarted' if (nfs_conf.changed or nfs_exports.changed) else 'started' }}"
+    enabled: yes
+
+- name: Enable and start nfs-kernel-server (Debian family)
+  when: ansible_os_family == 'Debian'
+  ansible.builtin.systemd:
+    name: nfs-kernel-server
+    state: "{{ 'restarted' if (nfs_default.changed or nfs_exports.changed) else 'started' }}"
+    enabled: yes
+
+- name: Re-export NFS shares
+  ansible.builtin.command: exportfs -rav
+  when: nfs_exports.changed
+  changed_when: true
