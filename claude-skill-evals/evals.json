@@ -1,0 +1,183 @@
+{
+  "skill": "anydbver",
+  "version": "0.1.33",
+  "verified_date": "2026-05-07",
+  "evals": [
+    {
+      "id": "mysql-bug-repro-async-replication",
+      "prompt": "I need to reproduce ticket PS-9999 on Percona Server 8.4.5 with async replication, source plus one replica.",
+      "expected_output": "A namespace-scoped deploy command pinned to ps:8.4.5 (not :latest), a brief node layout (node0 source / node1 replica), a verification command using `show replica status\\G`, and a namespace-scoped teardown.",
+      "expectations": [
+        "Pins to exact patch ps:8.4.5, NOT ps:8.4 or ps:latest",
+        "Uses --namespace=PS-9999 (or similar ticket-derived name), NOT the default namespace",
+        "First node has no master= ; second node has master=node0",
+        "Verification uses `anydbver exec node1 -- mysql` (or equivalent) to run `show replica status\\G`",
+        "Teardown uses `anydbver --namespace=PS-9999 destroy`, NOT bare `anydbver destroy`",
+        "States the prereq check (anydbver --version / docker reachable) before showing the deploy command",
+        "Does NOT propose --keep (this is a fresh repro)"
+      ]
+    },
+    {
+      "id": "pxc-three-node-galera-sysbench",
+      "prompt": "Spin up a 3-node Percona XtraDB Cluster on 8.4 and put sysbench OLTP load against it.",
+      "expected_output": "A single deploy command with one PXC bootstrap node and two `master=node0,galera` joiners, plus a sysbench node pointed at one of them; verification via `wsrep_cluster_size` and a sysbench prepare/run.",
+      "expectations": [
+        "First node uses pxc:8.4 with NO master= (bootstrap)",
+        "Subsequent nodes use master=node0,galera (or chained through node1)",
+        "sysbench node uses sysbench:latest,mysql=nodeN where nodeN is one of the PXC nodes",
+        "Verification includes `show status like 'wsrep_cluster_size'`",
+        "Mentions that wsrep_cluster_size should equal 3",
+        "Does NOT add unnecessary keywords like docker-image (PXC bug-repro should run from packages)"
+      ]
+    },
+    {
+      "id": "mysql-async-proxysql-orchestrator",
+      "prompt": "Async replication chain (3 MySQL nodes), with ProxySQL in front and Orchestrator watching the topology.",
+      "expected_output": "A 4-node deploy: ps source on node0, two ps replicas chained, Orchestrator on its own node with `master=node0`, and ProxySQL either on its own node or fronting the chain via `percona-proxysql:latest,master=node0`.",
+      "expectations": [
+        "node0 has ps:8.4 (or pinned patch) with NO master=",
+        "node1 has master=node0 ; node2 has master=node1 (chained) OR master=node0 (fan-out — both valid)",
+        "percona-orchestrator:latest,master=node0 lives on a dedicated node",
+        "percona-proxysql:latest,master=node0 lives on a dedicated node OR is added to an existing node",
+        "Verification mentions opening Orchestrator UI / inspecting ProxySQL `mysql_servers` table",
+        "Does NOT use --provider=kubectl (this is bare-Docker)"
+      ]
+    },
+    {
+      "id": "pg-bug-repro-logical-streaming",
+      "prompt": "Reproducir un bug en PostgreSQL 18.1 con replicación lógica entre primary y standby.",
+      "expected_output": "Comando de deploy con namespace dedicado, pg:18.1 fijado en patch exacto, ambos nodos con `wal=logical`, y un paso de verificación que consulte `pg_stat_wal_receiver` / `pg_replication_slots`.",
+      "expectations": [
+        "Pin exacto en pg:18.1 (no pg:18 ni pg:latest)",
+        "Usa --namespace=<algo descriptivo> (ticket id o similar)",
+        "Ambos nodos tienen wal=logical",
+        "El standby usa primary=node0 (o master=node0 — ambos válidos en PG)",
+        "Verificación menciona pg_stat_wal_receiver O pg_replication_slots",
+        "Teardown usa el mismo --namespace=<nombre>",
+        "Responde apropiadamente al prompt en español (no asume inglés)"
+      ]
+    },
+    {
+      "id": "patroni-ha-full-stack",
+      "prompt": "Full Patroni HA stack on Percona PG 17 — 3 Patroni members, HAProxy-Patroni, and pgbouncer in front.",
+      "expected_output": "A 5-node deploy: 3 Patroni members on cluster=cluster1, a haproxy-patroni node listing the 3 members positionally, and a pgbouncer node pointing at the HAProxy node. Verification via `patronictl list` and a query through pgbouncer.",
+      "expectations": [
+        "Uses ppg:17 (Percona PG), not pg:17 (vanilla)",
+        "All Patroni members share the same cluster=cluster1 (or whatever name)",
+        "haproxy-patroni uses the positional `node0,node1,node2` form (NO equals sign for the node list)",
+        "pgbouncer points at the HAProxy node (positional list or master=)",
+        "Verification includes `patronictl list` from one of the Patroni members",
+        "Mentions that one of node0/node1/node2 will be elected leader (others are sync/async standbys)"
+      ]
+    },
+    {
+      "id": "pgbackrest-minio-patroni",
+      "prompt": "Patroni cluster with pgbackrest writing backups to MinIO. Show me how to take a backup and verify it.",
+      "expected_output": "A deploy that includes `minio:docker-image` on a dedicated node (or shared node), a Patroni cluster, and `pgbackrest:s3=nodeN` on the PG nodes; verification via `pgbackrest --stanza=main info`.",
+      "expectations": [
+        "MinIO is deployed with docker-image (it's the supported way for MinIO)",
+        "pgbackrest uses s3=nodeN where nodeN is the MinIO node",
+        "Patroni members each have pgbackrest configured (not just one)",
+        "Includes a `pgbackrest --stanza=main backup` step (or notes that pgbackrest auto-takes one)",
+        "Verification uses `pgbackrest --stanza=main info`",
+        "Does NOT confuse s3=nodeN with server=nodeN (those are different keywords used by different tools)"
+      ]
+    },
+    {
+      "id": "psmdb-sharded-cluster-keyfile",
+      "prompt": "Spin up a PSMDB 8.0 sharded cluster — 2 shards × 3 nodes, 3 config servers, 1 mongos.",
+      "expected_output": "First the keyfile-copy commands (openssl + cp loop for cfg0-keyfile to rs0/rs1-keyfile), THEN the deploy with role=shard / role=cfg / mongos-cfg + mongos-shard. Verification via `sh.status()` on the mongos.",
+      "expectations": [
+        "Includes `openssl rand -base64 756 > secret/cfg0-keyfile` BEFORE the deploy command",
+        "Includes `cp -L secret/cfg0-keyfile secret/rs0-keyfile` AND `cp -L secret/cfg0-keyfile secret/rs1-keyfile` (one per shard RS)",
+        "Each shard node has replica-set=rsN,role=shard ; each cfg node has replica-set=cfg0,role=cfg",
+        "Only the FIRST mongos has both mongos-cfg: and mongos-shard:",
+        "mongos-shard: lists shards as rs0/n0,n1,n2,rs1/n3,n4,n5 (RS-name/node-list groups)",
+        "Verification uses `sh.status()` from node9 (mongos), not from a shard primary",
+        "Pins to psmdb:8.0 explicitly"
+      ]
+    },
+    {
+      "id": "psmdb-pbm-minio",
+      "prompt": "3-node PSMDB replica set with Percona Backup for MongoDB, backups going to MinIO.",
+      "expected_output": "A deploy with MinIO on node0, three PSMDB replica-set nodes each carrying `pbm:latest,s3=node0/backup`. Verification via `pbm status` showing all three RS members have agents.",
+      "expectations": [
+        "MinIO uses docker-image",
+        "Every PSMDB node (all 3) has pbm:latest,s3=node0/backup — NOT just one",
+        "Replica set: first node has replica-set=rs0 ; subsequent have replica-set=rs0,master=node1 (or master=node0)",
+        "Verification uses `pbm status` (showing all 3 agents are connected)",
+        "s3 path is node0/backup (or node0 with default bucket)",
+        "PBM agent must be running on each node — eval should mention or verify this"
+      ]
+    },
+    {
+      "id": "pmm-3x-cross-db-monitoring",
+      "prompt": "I want one PMM 3.x server monitoring a Percona Server node, a Postgres node, and a PSMDB replica set node, all in the same lab.",
+      "expected_output": "A multi-node deploy: pmm:3.7.0,docker-image,port=12443 on node0, then ps/pg/psmdb on node1/2/3 each carrying pmm-client:3.7.0-7,server=node0:8443. Verification: open https://localhost:12443 and run `pmm-admin list` on each client.",
+      "expectations": [
+        "PMM client uses server=node0:8443 — NOT server=node0 (that's PMM 2.x), NOT server=node0:443",
+        "pmm-client version includes the release suffix `-7`: pmm-client:3.7.0-7 — NOT bare pmm-client:3.7.0",
+        "PMM server has docker-image modifier",
+        "Host port for the UI is set via port=12443 (or any free port)",
+        "All three monitored nodes (PS, PG, PSMDB) share the same server=node0:8443 string",
+        "Verification mentions the host-side URL (https://localhost:12443) and `pmm-admin list`",
+        "Does NOT confuse host port (12443) with internal port (8443) — explanation should make this clear if asked"
+      ]
+    },
+    {
+      "id": "k3d-pg-operator-with-standby",
+      "prompt": "Local k8s with the Percona PG operator — primary cluster plus a standby cluster in another namespace.",
+      "expected_output": "A k3d-based deploy: k3d, cert-manager, k8s-pg:2.7.0, then a second k8s-pg:2.7.0,namespace=pgo1,standby. Verification via `kubectl get pg --all-namespaces` and entering `anydbver shell` for kubectl.",
+      "expectations": [
+        "Includes k3d (or k3d:latest) — needed to bootstrap the nested cluster",
+        "Includes cert-manager (the Percona PG operator requires it)",
+        "First k8s-pg deploys to the default namespace; second uses namespace=pgo1,standby",
+        "Mentions that `anydbver shell` enters a container with kubectl/helm pre-wired",
+        "Verification command uses kubectl (e.g. `kubectl get pg -A`)",
+        "RAM warning: cert-manager + operator + 3-replica CR ≈ 6–8 GB (or similar caveat)",
+        "Does NOT use bare-Docker keywords like `pg:18` (this is operator territory)"
+      ]
+    },
+    {
+      "id": "diagnostic-sharded-keyfile-mismatch",
+      "prompt": "I deployed a PSMDB sharded cluster but mongos refuses to add shards with errors about cluster IDs. What went wrong and how do I fix it?",
+      "expected_output": "Identifies the missing keyfile-copy step as the root cause (every RS must share the same keyfile). Recovery: destroy the namespace, regenerate cfg0-keyfile with openssl, copy to rs0-keyfile / rs1-keyfile / rs2-keyfile, then redeploy.",
+      "expectations": [
+        "Identifies keyfile mismatch as the root cause (NOT a network or version problem)",
+        "References that every replica set in the cluster must share the same keyfile",
+        "Recovery includes destroying the existing namespace BEFORE regenerating keyfiles (because keyfiles are persisted in secret/)",
+        "Includes `openssl rand -base64 756 > secret/cfg0-keyfile`",
+        "Includes the cp loop for rs0-keyfile, rs1-keyfile, rs2-keyfile",
+        "Does NOT propose to fix in place — keyfile state requires destroy + redeploy",
+        "Does NOT suggest unrelated fixes (network, mongos config, version pinning)"
+      ]
+    },
+    {
+      "id": "install-cache-bug-repro-loop",
+      "prompt": "I'm reproducing a Percona Server 8.4.5 bug across many destroy+redeploy iterations. Speed up the loop with `install` + `cache:`.",
+      "expected_output": "Two passes: first deploy `install ps:8.4.5 cache:ps-8.4.5` to bake the cache, then a second deploy with `install ps:8.4.5 cache:ps-8.4.5` per node followed by `ps:8.4.5` per node (the configure-and-start step). Subsequent destroys/redeploys reuse the cached image.",
+      "expectations": [
+        "First command is the cache-build pass: `anydbver deploy install ps:8.4.5 cache:ps-8.4.5`",
+        "Second command repeats `install ps:8.4.5 cache:ps-8.4.5` on EACH node (one line per node)",
+        "Second command has a SEPARATE `default ps:8.4.5` / `node1 ps:8.4.5 master=...` (or master:default) section to actually configure-and-start",
+        "Cache name is consistent (cache:ps-8.4.5) across all references — NOT a different name on each node",
+        "Pinned to ps:8.4.5 (the bug-repro version) throughout — not :latest",
+        "Mentions that `anydbver destroy --remove-cache` wipes the cache when done"
+      ]
+    },
+    {
+      "id": "nfs-shared-backup-repo-patroni",
+      "prompt": "Patroni cluster with pgbackrest, but I want all 3 nodes sharing the same backup repo over NFS instead of S3.",
+      "expected_output": "A deploy with `nfs` on node0, then 3 Patroni nodes each carrying pg, patroni, `pgbackrest:repo=/mnt/nfs/pgbackrest`, and `nfs-client:server=node0`. Verification: `pgbackrest --stanza=main info` from any Patroni node + `mount | grep nfs` on a client.",
+      "expectations": [
+        "node0 has the `nfs` keyword (alias for nfs-server)",
+        "Each Patroni member (node1/2/3) has nfs-client:server=node0",
+        "pgbackrest uses repo=/mnt/nfs/pgbackrest (the shared NFS path), NOT s3=node0",
+        "Patroni members chain via master=node1 (after node1 bootstraps) or all use master=node0",
+        "Notes the destroy-order gotcha: tear down clients BEFORE the NFS server, otherwise Docker wedges",
+        "Notes that the NFS export is tmpfs-backed and ephemeral — fine for repro but data is lost on teardown",
+        "Verification uses `pgbackrest --stanza=main info` AND `mount | grep nfs` on a client"
+      ]
+    }
+  ]
+}

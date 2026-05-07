@@ -19,6 +19,18 @@ anydbver update
 1. Download the latest version from [releases page](https://github.com/zelmario/anydbver/releases) as mentioned in the Installation section above
 2. Execute `anydbver update` to update the version database using the sql file from the head
 
+# Claude Code skill (optional)
+
+If you use [Claude Code](https://claude.com/claude-code), you can drop a project skill into your skills directory so Claude can drive `anydbver` via natural language ("spin up a 3-node PXC cluster", "reproduce this Mongo bug on PSMDB 8.0", "armar replica de Postgres"):
+
+```
+mkdir -p ~/.claude/skills
+curl -L https://github.com/zelmario/anydbver/releases/latest/download/anydbver-skill.tar.gz \
+  | tar -xz -C ~/.claude/skills/
+```
+
+The skill is self-contained markdown — `SKILL.md` plus a `references/` directory with topology recipes, options tables, and troubleshooting. It assumes you already have the `anydbver` binary installed (steps above).
+
 # Getting examples
 Anydbver includes a test suite, you may list all deployment commands and run it/modify as you need:
 ```
