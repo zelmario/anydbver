@@ -2832,6 +2832,7 @@ INSERT INTO tests VALUES(45,'patroni standby','anydbver deploy ppg:16 patroni:cl
 INSERT INTO tests VALUES(46,'PMM3','anydbver deploy pmm:3.3.1,docker-image,port=12443 node1 ps:latest pmm-client:3.3.1-7,server=node0:8443');
 INSERT INTO tests VALUES(47,'pg with pgbouncer','anydbver deploy pgbouncer:node1,node2,node3 node1 pg node2 pg:master=node1 node3 pg:master=node1');
 INSERT INTO tests VALUES(48,'patroni pgbackrest haproxy pgbouncer','anydbver deploy ppg:16 patroni:cluster=cluster1 pgbackrest node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest node3 haproxy-patroni:node0,node1,node2 node4 pgbouncer:node3');
+INSERT INTO tests VALUES(49,'pmm ha tech preview','anydbver deploy k3d k8s-pmm-ha:1.4.1,size=small');
 CREATE TABLE test_cases(
   test_id int,
   cmd varchar(1000)
@@ -4019,6 +4020,13 @@ INSERT INTO k8s_arguments VALUES('percona-server-mysql-operator','helm','%',NULL
 INSERT INTO k8s_arguments VALUES('k8s-minio','version','%','VERSION','--minio','latest,helm=minio',1,1);
 INSERT INTO k8s_arguments VALUES('k8s-minio','certs','%','','--minio-certs','self-signed',1,1);
 INSERT INTO k8s_arguments VALUES('k8s-pmm','version','%','VERSION','--pmm','2.42.0,helm=percona-helm-charts:1.3.14,certs=self-signed,namespace=monitoring',1,1);
+INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','version','%','VERSION','--pmm-ha','1.4.1',1,1);
+INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','deps','%','','--pmm-ha-deps','1.0.0',1,1);
+INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','namespace','%','','--namespace','pmm',1,1);
+INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','size','%','','--pmm-ha-size','small',1,1);
+INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','replicas','%','','--pmm-ha-replicas','3',1,1);
+INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','password','%','','--pmm-ha-password','admin',1,1);
+INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','values','%','','--helm-values','',1,NULL);
 INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','standby','%','','--standby','',1,NULL);
 INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','replicas','%','','--db-replicas','3',1,1);
 INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','shards','%','','--db-shards','1',1,1);
@@ -4045,6 +4053,7 @@ INSERT INTO keyword_aliases VALUES('percona-server-mongodb-operator','k8s-psmdb'
 INSERT INTO keyword_aliases VALUES('percona-server-mysql-operator','k8s-ps');
 INSERT INTO keyword_aliases VALUES('percona-backup-mongodb','pbm');
 INSERT INTO keyword_aliases VALUES('nfs-server','nfs');
+INSERT INTO keyword_aliases VALUES('k8s-pmm-ha','pmm-ha');
 CREATE TABLE subcmd_aliases(keyword TEXT,alias TEXT);
 INSERT INTO subcmd_aliases VALUES('master','primary');
 CREATE TABLE help_examples(cmd varchar(100), deploy varchar(1000));

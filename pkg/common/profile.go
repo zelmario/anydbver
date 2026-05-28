@@ -305,6 +305,10 @@ func GetToolsDirectory(logger *log.Logger, namespace string) string {
 }
 
 func RunCommandInBaseContainer(logger *log.Logger, namespace string, cmd string, volumes []string, errMsg string, interactive bool) (string, error) {
+	return RunCommandInBaseContainerWithTimeout(logger, namespace, cmd, volumes, errMsg, interactive, runtools.COMMAND_TIMEOUT)
+}
+
+func RunCommandInBaseContainerWithTimeout(logger *log.Logger, namespace string, cmd string, volumes []string, errMsg string, interactive bool, timeoutSec int) (string, error) {
 	user := GetUser(logger)
 
 	cmd_args := []string{
@@ -337,7 +341,7 @@ func RunCommandInBaseContainer(logger *log.Logger, namespace string, cmd string,
 			os.Exit(1)
 		}
 	}
-	return runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, runtools.COMMAND_TIMEOUT)
+	return runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, timeoutSec)
 }
 
 func MakeContainerHostName(logger *log.Logger, namespace string, name string) string {

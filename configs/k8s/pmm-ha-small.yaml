@@ -1,0 +1,89 @@
+# PMM HA "small" profile for anydbver -- single-node k3d / laptop friendly.
+#
+# PMM stays at 3 replicas so Raft leader election and HAProxy leader routing
+# are real and demonstrable, but every heavy backend is scaled to a single
+# replica and resource requests + PVC sizes are shrunk so the whole stack fits
+# on one k3d node (~8 cores / 12-15 GB RAM).
+#
+# The full chart defaults need 12+ cores / 20-40 GB and assume multiple nodes:
+# HAProxy and PostgreSQL use REQUIRED pod-anti-affinity, so their 3 replicas sit
+# Pending on a single node. Dropping those to 1 replica makes the required
+# anti-affinity trivially satisfiable without having to rewrite the rules.
+#
+# NOT for production. Use size=full (no override) on a real multi-node cluster
+# (or EKS) for genuinely HA backends. Value paths verified against pmm-ha 1.4.1.
+
+# --- PMM servers: keep 3 for Raft HA, shrink resources ---
+pmmResources:
+  requests:
+    memory: "768Mi"
+    cpu: "250m"
+  limits:
+    memory: "2Gi"
+    cpu: "1"
+
+# --- HAProxy: 1 replica avoids the required anti-affinity (needs 3 nodes) ---
+haproxy:
+  replicaCount: 1
+
+# --- ClickHouse (QAN): single shard, TWO replicas + single keeper.
+# qan-api2 hangs in "Waiting for ClickHouse cluster to be ready" until
+# system.clusters has at least one remote (non-local) host -- with 1 replica
+# every row has is_local=1 so qan-api2 never finishes, and pmm-ha-0 never
+# becomes Ready. CH anti-affinity is "preferred", so 2 replicas schedule
+# happily on a single node. ---
+clickhouse:
+  resources:
+    requests:
+      memory: "768Mi"
+      cpu: "250m"
+    limits:
+      memory: "2Gi"
+      cpu: "1"
+  cluster:
+    shards: 1
+    replicas: 2
+  keeper:
+    replicasCount: 1
+    storage:
+      size: 2Gi
+  storage:
+    size: 5Gi
+
+# --- PostgreSQL (Grafana metadata): single instance + single pgBouncer.
+# The instances list is replaced wholesale by Helm, so we restate the one
+# instance with replicas:1; with a single pod the required anti-affinity in the
+# chart default no longer needs a second node. pgBouncer ships with required
+# anti-affinity too -- drop it to 1 replica so it schedules on one node. ---
+pg-db:
+  instances:
+    - name: instance1
+      replicas: 1
+      dataVolumeClaimSpec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi
+  proxy:
+    pgBouncer:
+      replicas: 1
+
+# --- VictoriaMetrics: single replica everywhere, replication factor 1 ---
+victoriaMetrics:
+  replicationFactor: 1
+  vmselect:
+    replicaCount: 1
+  vminsert:
+    replicaCount: 1
+  vmauth:
+    replicaCount: 1
+  vmagent:
+    replicaCount: 1
+  vmstorage:
+    replicaCount: 1
+    storageSize: 10Gi
+
+# --- PMM server data volume ---
+storage:
+  size: 10Gi

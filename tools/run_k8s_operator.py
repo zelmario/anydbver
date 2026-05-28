@@ -13,6 +13,7 @@ import base64
 import urllib
 import urllib.parse
 import json
+import secrets
 
 COMMAND_TIMEOUT = 600
 
@@ -1588,6 +1589,109 @@ def operator_info(args):
                           args.users_secret, args.cluster_name)
 
 
+def info_pmm_ha(args, ns, password):
+    logger.info("=" * 72)
+    logger.info("PMM HA is deployed in namespace '{}'".format(ns))
+    logger.info(
+        "Open the UI through HAProxy (the only supported external entry point):")
+    logger.info(
+        "  kubectl port-forward -n {} svc/pmm-ha-haproxy 8443:443".format(ns))
+    logger.info(
+        "  then browse https://localhost:8443  (login: admin / {})".format(password))
+    logger.info("Find the Raft leader / check PMM pods:")
+    logger.info(
+        "  kubectl get pods -n {} -l app.kubernetes.io/name=pmm-ha".format(ns))
+    logger.info("Operator-managed backends:")
+    logger.info(
+        "  kubectl get vmcluster,postgrescluster,clickhouseinstallation -n {}".format(ns))
+    logger.info("=" * 72)
+
+
+def deploy_pmm_ha(args):
+    # PMM HA (Tech Preview): a Kubernetes-native HA PMM deployment installed in
+    # two Helm steps -- operators first (pmm-ha-dependencies), then the PMM HA
+    # stack itself (pmm-ha). See https://docs.percona.com/ for the upstream docs.
+    if not k8s_wait_for_ready('kube-system', 'k8s-app=kube-dns'):
+        raise Exception("Kubernetes cluster is not available")
+
+    ns = args.namespace if args.namespace not in ("", "default") else "pmm"
+    helm = args.helm_path
+    chart_ver = args.pmm_ha
+    deps_ver = args.pmm_ha_deps
+    password = args.pmm_ha_password if args.pmm_ha_password else "admin"
+
+    run_helm(helm, ["helm", "repo", "add", "percona",
+             "https://percona.github.io/percona-helm-charts/"], "helm repo add problem")
+    run_helm(helm, ["helm", "repo", "update", "percona"],
+             "helm repo update problem")
+
+    run_fatal(["kubectl", "create", "namespace", ns],
+              "Can't create a namespace for PMM HA", r"from server \(AlreadyExists\)")
+
+    # Step 1: the Kubernetes operators (VictoriaMetrics, Altinity ClickHouse,
+    # Percona PostgreSQL) that manage the PMM HA backends.
+    deps_cmd = ["helm", "upgrade", "--install", "pmm-operators",
+                "percona/pmm-ha-dependencies", "--namespace", ns,
+                "--create-namespace", "--timeout", "{}s".format(COMMAND_TIMEOUT)]
+    if deps_ver and deps_ver not in ("latest", ""):
+        deps_cmd += ["--version", deps_ver]
+    run_helm(helm, deps_cmd, "Can't install pmm-ha-dependencies (operators)")
+
+    # Wait until the operator Deployments are ready before creating their CRs,
+    # otherwise the pmm-ha chart's VMCluster/PostgresCluster/ClickHouse resources
+    # are rejected by not-yet-ready admission webhooks.
+    if not wait_for_success(
+            ["kubectl", "wait", "--for=condition=Available", "--timeout=5s",
+             "-n", ns, "deployment", "--all"],
+            "PMM HA operators are not becoming ready",
+            r"no matching resources found|timed out waiting for the condition",
+            timeout=COMMAND_TIMEOUT):
+        raise Exception("PMM HA operators did not become ready")
+
+    # Step 2: the pmm-secret MUST exist before the pmm-ha chart is installed --
+    # the chart does a render-time lookup of it and hard-fails when it is absent
+    # (secret.create=true alone is not enough on a clean install because the
+    # creating hook is applied only after the lookup runs).
+    run_fatal(["kubectl", "create", "secret", "generic", "pmm-secret",
+               "--namespace", ns,
+               "--from-literal=PMM_ADMIN_PASSWORD=" + password,
+               "--from-literal=PMM_CLICKHOUSE_USER=clickhouse_pmm",
+               "--from-literal=PMM_CLICKHOUSE_PASSWORD=" + secrets.token_urlsafe(18),
+               "--from-literal=VMAGENT_remoteWrite_basicAuth_username=victoriametrics_pmm",
+               "--from-literal=VMAGENT_remoteWrite_basicAuth_password=" + secrets.token_urlsafe(18),
+               "--from-literal=PG_PASSWORD=" + secrets.token_urlsafe(18),
+               "--from-literal=GF_PASSWORD=" + secrets.token_urlsafe(18)],
+              "Can't create pmm-secret", r"already exists")
+
+    # Step 3: the PMM HA stack itself.
+    install_cmd = ["helm", "upgrade", "--install", "pmm-ha", "percona/pmm-ha",
+                   "--namespace", ns, "--timeout", "{}s".format(COMMAND_TIMEOUT),
+                   "--set", "replicas=" + str(args.pmm_ha_replicas)]
+    if chart_ver and chart_ver not in ("latest", ""):
+        install_cmd += ["--version", chart_ver]
+    if args.pmm_ha_size == "small":
+        install_cmd += ["-f",
+                        str((Path(args.conf_path) / "pmm-ha-small.yaml").resolve())]
+    if args.helm_values:
+        install_cmd += ["-f", str(Path(args.helm_values).resolve())]
+    run_helm(helm, install_cmd, "Can't install pmm-ha")
+
+    # Wait on the StatefulSet's readyReplicas, not on the pod label selector --
+    # the SS uses OrderedReady so only pmm-ha-0 exists at first, and a plain
+    # pod-label wait would return success the moment that one pod is ready,
+    # well before pmm-ha-1 and pmm-ha-2 have even been created.
+    if not wait_for_success(
+            ["kubectl", "wait", "--timeout=2s",
+             "--for=jsonpath={.status.readyReplicas}=" + str(args.pmm_ha_replicas),
+             "-n", ns, "sts/pmm-ha"],
+            "PMM HA StatefulSet is not reaching ready",
+            r"timed out waiting for the condition|no matching resources found",
+            timeout=3 * COMMAND_TIMEOUT):
+        raise Exception("PMM HA pods are not starting")
+
+    info_pmm_ha(args, ns, password)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data-path", dest="data_path", type=str, default="")
@@ -1645,6 +1749,15 @@ def main():
     parser.add_argument('--loki', dest="loki", action='store_true')
     parser.add_argument('--kube-fledged', dest="kube_fledged", default="")
     parser.add_argument('--proxysql', dest="proxysql", action='store_true')
+    parser.add_argument('--pmm-ha', dest="pmm_ha", type=str, default="")
+    parser.add_argument('--pmm-ha-deps', dest="pmm_ha_deps",
+                        type=str, default="1.0.0")
+    parser.add_argument('--pmm-ha-size', dest="pmm_ha_size",
+                        type=str, default="small")
+    parser.add_argument('--pmm-ha-replicas', dest="pmm_ha_replicas",
+                        type=str, default="3")
+    parser.add_argument('--pmm-ha-password', dest="pmm_ha_password",
+                        type=str, default="admin")
     args = parser.parse_args()
 
     args.anydbver_path = (Path(__file__).parents[1]).resolve()
@@ -1664,7 +1777,9 @@ def main():
     if args.namespace == "":
         args.namespace = get_operator_ns(args.operator_name)
 
-    if not args.info:
+    if not args.info and args.pmm_ha != "":
+        deploy_pmm_ha(args)
+    elif not args.info:
         if args.operator_name == "" and args.kube_fledged != "":
             run_kube_fledged_helm(args.helm_path)
         if args.loki:

@@ -1069,11 +1069,11 @@ func runOperatorTool(logger *log.Logger, namespace string, name string, run_oper
 		}
 	}
 
-	ansible_output, err := anydbver_common.RunCommandInBaseContainer(
+	ansible_output, err := anydbver_common.RunCommandInBaseContainerWithTimeout(
 		logger, namespace,
 		"source ~/.bashrc;cd /vagrant;mkdir /root/.kube ; cp /vagrant/secret/.kube/config /root/.kube/config; mkdir -p /root/.config; cp -r /vagrant/secret/gcloud /root/.config/; test -f /usr/local/bin/kubectl || (curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/"+runtime.GOARCH+"/kubectl ; chmod +x kubectl ; mv kubectl /usr/local/bin/kubectl); test -f /vagrant/tools/yq || (curl -LO  https://github.com/mikefarah/yq/releases/latest/download/yq_linux_"+runtime.GOARCH+" ; chmod +x yq_linux_"+runtime.GOARCH+"; mv yq_linux_"+runtime.GOARCH+" tools/yq); useradd -m -u "+userId+" anydbver; mkdir -p /vagrant/data/k8s; git config --global http.postBuffer 524288000; git config --global --add safe.directory '*'; "+fix_k3d_config+"python3 tools/run_k8s_operator.py "+run_operator_args+"; chown -R "+userId+" /vagrant/data/k8s/",
 		volumes,
-		"Error running kubernetes operator", false)
+		"Error running kubernetes operator", false, runtools.COMMAND_TIMEOUT*6)
 	if err != nil {
 		logger.Println("Ansible failed with errors: ")
 		fatalPattern := regexp.MustCompile(`^fatal:.*$`)
