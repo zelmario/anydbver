@@ -1,7 +1,7 @@
 {
   "skill": "anydbver",
-  "version": "0.1.33",
-  "verified_date": "2026-05-07",
+  "version": "0.1.34",
+  "verified_date": "2026-05-28",
   "evals": [
     {
       "id": "mysql-bug-repro-async-replication",
@@ -177,6 +177,21 @@
         "Notes the destroy-order gotcha: tear down clients BEFORE the NFS server, otherwise Docker wedges",
         "Notes that the NFS export is tmpfs-backed and ephemeral — fine for repro but data is lost on teardown",
         "Verification uses `pgbackrest --stanza=main info` AND `mount | grep nfs` on a client"
+      ]
+    },
+    {
+      "id": "pmm-ha-tech-preview-single-node",
+      "prompt": "I want to reproduce a PMM HA Tech Preview issue locally on my laptop (8 cores, 16GB RAM). What's the smallest working setup?",
+      "expected_output": "A single command `anydbver deploy k3d k8s-pmm-ha:1.4.1` (which defaults to size=small), plus how to access the UI via HAProxy port-forward, and the verification that 3 PMM pods are running with Raft leader election in place.",
+      "expectations": [
+        "Uses `k3d k8s-pmm-ha:1.4.1` (or `k8s-pmm-ha:1.4.1,size=small`) — does NOT pass size=full on a laptop",
+        "Mentions the default profile keeps PMM at 3 replicas for Raft HA but shrinks every backend (HAProxy, PG, pgBouncer, VictoriaMetrics) to 1 replica and ClickHouse to 2",
+        "Calls out that PMM HA is Tech Preview — not production-ready",
+        "UI access via `kubectl port-forward -n pmm svc/pmm-ha-haproxy 8443:443` then https://localhost:8443",
+        "Default login is admin / admin (or whatever password= was set to)",
+        "Verification includes `kubectl get pods -n pmm -l app.kubernetes.io/name=pmm-ha` (3 pmm-ha-N pods Ready)",
+        "Mentions that only the Raft leader returns 200 on /v1/server/leaderHealthCheck (HAProxy routes to it)",
+        "Does NOT suggest pulling pmm-ha:latest — pins to 1.4.1 (PMM 3.7.1)"
       ]
     }
   ]

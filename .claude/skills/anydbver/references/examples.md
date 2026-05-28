@@ -1,6 +1,6 @@
 # Examples by scenario
 
-> Verified on 2026-05-07. Every command below is a real, documented example — verbatim from `instructions.md`, `MONGO.md`, `CACHING.md`, or `anydbver deploy help <keyword>`. Versions in these examples will drift; pin explicitly when you reproduce a bug.
+> Verified on 2026-05-28. Every command below is a real, documented example — verbatim from `instructions.md`, `MONGO.md`, `CACHING.md`, or `anydbver deploy help <keyword>`. Versions in these examples will drift; pin explicitly when you reproduce a bug.
 
 Tear down between scenarios with `anydbver destroy` (or use `--namespace=<name>` to keep them parallel).
 
@@ -271,6 +271,42 @@ anydbver deploy \
 After deploy, drive kubectl/helm yourself:
 ```sh
 anydbver shell    # enters a container with kubectl + helm wired up
+```
+
+## PMM HA on Kubernetes (Tech Preview)
+
+`k8s-pmm-ha` installs the two-step PMM HA stack (`pmm-ha-dependencies`
+operators + `pmm-ha`) and creates the required `pmm-secret`. The
+default `size=small` profile shrinks every backend so the full stack
+fits one k3d node (~8c/12-15GB); PMM itself stays at 3 replicas so
+Raft leader election and HAProxy leader routing are real.
+
+```sh
+# Default small profile — single k3d node
+anydbver deploy k3d k8s-pmm-ha:1.4.1
+
+# Override the admin password
+anydbver deploy k3d k8s-pmm-ha:1.4.1,size=small,password=mysecret
+
+# Real multi-node cluster — chart defaults (requires ≥3 nodes for required anti-affinity)
+anydbver deploy k3d:nodes=3 k8s-pmm-ha:1.4.1,size=full
+
+# Custom helm values layered on top of the small profile
+anydbver deploy k3d k8s-pmm-ha:1.4.1,values=/path/to/extra.yaml
+```
+
+Access the UI through HAProxy (the only supported external entry):
+
+```sh
+kubectl port-forward -n pmm svc/pmm-ha-haproxy 8443:443
+# then browse https://localhost:8443  (login: admin / <password>)
+```
+
+Find the Raft leader and inspect operator-managed backends:
+
+```sh
+kubectl get pods -n pmm -l app.kubernetes.io/name=pmm-ha
+kubectl get vmcluster,postgrescluster,clickhouseinstallation -n pmm
 ```
 
 ## LDAP / Kerberos authentication

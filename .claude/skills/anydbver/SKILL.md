@@ -1,6 +1,6 @@
 ---
 name: anydbver
-description: Drive `anydbver` to spin up multi-node database test environments as Docker containers (or nested K3D clusters) — Percona Server / MySQL / MariaDB / PXC, PostgreSQL / Percona PG, PSMDB / MongoDB, Valkey, plus the surrounding stack (Patroni, repmgr, ProxySQL, Orchestrator, HAProxy, pgbouncer, pgbackrest, Barman, PBM, xtrabackup, PMM 2.x/3.x, MinIO, NFS, LDAP, Kerberos, sysbench, Percona operators on K3D). Use when the user wants to spin up Mongo locally, armar una réplica de Postgres, build a 3-node PXC cluster, set up Patroni HA, reproducir un bug en MySQL 8.4 / PSMDB 8.0, run local k8s with the Percona PG operator, levantar PMM monitoreando varias DBs, or tirar abajo el ambiente. Triggers on `anydbver`, `psmdb:`, `ps:`, `pxc:`, `pg:`, `ppg:`, `pgbackrest:s3=`, `mongos-shard`, `replica-set=`, `role=shard`, `master=node0`, `master=default`, `kerberos-server=`, `nfs-client:server=`, `pmm-client:3.7.0-7,server=node0:8443`, `k3d:`, `k8s-pg`, `k8s-pxc`, `k8s-psmdb`, `cache:`. This skill does **not** apply to production deployments, managed services (Atlas / RDS / CloudSQL / Cosmos), or diagnosing problems in already-running systems unrelated to anydbver.
+description: Drive `anydbver` to spin up multi-node database test environments as Docker containers (or nested K3D clusters) — Percona Server / MySQL / MariaDB / PXC, PostgreSQL / Percona PG, PSMDB / MongoDB, Valkey, plus the surrounding stack (Patroni, repmgr, ProxySQL, Orchestrator, HAProxy, pgbouncer, pgbackrest, Barman, PBM, xtrabackup, PMM 2.x/3.x, PMM HA Tech Preview on k8s, MinIO, NFS, LDAP, Kerberos, sysbench, Percona operators on K3D). Use when the user wants to spin up Mongo locally, armar una réplica de Postgres, build a 3-node PXC cluster, set up Patroni HA, reproducir un bug en MySQL 8.4 / PSMDB 8.0, run local k8s with the Percona PG operator, levantar PMM monitoreando varias DBs, reproducir un ticket de PMM HA, or tirar abajo el ambiente. Triggers on `anydbver`, `psmdb:`, `ps:`, `pxc:`, `pg:`, `ppg:`, `pgbackrest:s3=`, `mongos-shard`, `replica-set=`, `role=shard`, `master=node0`, `master=default`, `kerberos-server=`, `nfs-client:server=`, `pmm-client:3.7.0-7,server=node0:8443`, `k3d:`, `k8s-pg`, `k8s-pxc`, `k8s-psmdb`, `k8s-pmm-ha`, `pmm-ha:`, `cache:`. This skill does **not** apply to production deployments, managed services (Atlas / RDS / CloudSQL / Cosmos), or diagnosing problems in already-running systems unrelated to anydbver.
 ---
 
 # anydbver
@@ -26,14 +26,14 @@ description: Drive `anydbver` to spin up multi-node database test environments a
 
 Before composing a deploy, run these in order:
 
-1. `anydbver --version` — confirms binary present (current stable: v0.1.33).
+1. `anydbver --version` — confirms binary present (current stable: v0.1.34).
 2. `docker version` and group membership: `id -nG | grep -q docker || echo "user not in docker group"`.
 3. `anydbver list` — shows what's already running. **A bare `anydbver deploy` (no `--keep`) implicitly destroys whatever is in the current namespace** — confirm with the user before stepping on someone else's environment.
 4. `anydbver update` — refreshes the local version DB if versions look wrong or the user just upgraded.
 
 ## Introspection-first principle
 
-The instructions and tables below were verified on **2026-05-07**. anydbver evolves; the CLI's own help is canonical. Before emitting a non-trivial deploy command for a keyword combination you have not used in the conversation:
+The instructions and tables below were verified on **2026-05-28**. anydbver evolves; the CLI's own help is canonical. Before emitting a non-trivial deploy command for a keyword combination you have not used in the conversation:
 
 ```sh
 anydbver deploy help <keyword>      # subcommands + verbatim CLI examples

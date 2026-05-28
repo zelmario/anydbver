@@ -230,6 +230,7 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `percona-server-mongodb-operator`| `k8s-psmdb`, `k8s-mongo` | PSMDB operator                   |
 | `percona-postgresql-operator`    | `k8s-pg`            | PostgreSQL operator                  |
 | `k8s-pmm`                        |                     | PMM inside k8s                       |
+| `k8s-pmm-ha`                     | `pmm-ha`            | PMM HA (Tech Preview) on k8s         |
 
 ### Benchmark
 
@@ -370,6 +371,10 @@ the ones you will use most often.
 | `standby`               | Create a standby cluster (k8s-pg)                  |
 | `proxysql`              | Enable ProxySQL in the cluster (k8s-pxc)           |
 | `certs=self-signed`     | Use self-signed TLS certificates (k8s-minio)       |
+| `size=small\|full`       | PMM HA profile (k8s-pmm-ha): small fits one k3d node |
+| `password=...`          | PMM admin password (k8s-pmm-ha, default `admin`)   |
+| `deps=1.0.0`            | pmm-ha-dependencies chart version (k8s-pmm-ha)     |
+| `values=path.yaml`      | Extra helm values file (k8s-pmm-ha, k8s-pg, ...)   |
 
 ### Valkey
 
@@ -668,6 +673,39 @@ To drive kubectl/helm yourself against the created cluster:
 ```sh
 anydbver shell    # enters a container with kubectl + helm wired up
 ```
+
+### PMM HA on Kubernetes (Tech Preview)
+
+The `k8s-pmm-ha` keyword installs the two-step PMM HA helm stack
+(`pmm-ha-dependencies` operators + `pmm-ha`) plus the required
+`pmm-secret`. PMM HA itself is **Tech Preview** — not production ready.
+
+```sh
+# Default profile (size=small) — fits one k3d node (~8c/12-15GB)
+anydbver deploy k3d k8s-pmm-ha:1.4.1
+
+# Explicit small profile + override the admin password
+anydbver deploy k3d k8s-pmm-ha:1.4.1,size=small,password=mysecret
+
+# Real multi-node cluster — chart defaults (3x everything, REQUIRED anti-affinity)
+anydbver deploy k3d:nodes=3 k8s-pmm-ha:1.4.1,size=full
+
+# Custom helm values on top of the small profile
+anydbver deploy k3d k8s-pmm-ha:1.4.1,size=small,values=/path/to/extra.yaml
+```
+
+Access the UI through HAProxy:
+
+```sh
+kubectl port-forward -n pmm svc/pmm-ha-haproxy 8443:443
+# then browse https://localhost:8443  (login: admin / <password>)
+```
+
+The `size=small` profile keeps PMM at 3 replicas (so Raft leader election
+and HAProxy leader routing remain demonstrable) but drops HAProxy,
+PostgreSQL, pgBouncer and VictoriaMetrics to 1 replica each and bumps
+ClickHouse to 2 replicas (qan-api2 hangs at startup if the CH cluster
+has no remote hosts, so 1x1 deadlocks PMM readiness forever).
 
 ### LDAP / Kerberos authentication
 

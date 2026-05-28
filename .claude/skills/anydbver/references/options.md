@@ -1,6 +1,6 @@
 # Options reference (per family)
 
-> Verified on 2026-05-07. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
+> Verified on 2026-05-28. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
 
 ## MySQL / Percona Server / MariaDB / mydb
 
@@ -158,6 +158,25 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 - K3D RAM appetite: `cert-manager + operator + 3-replica CR ≈ 6–8 GB`. Underprovisioned hosts will see Pending pods and operator CrashLoopBackOff.
 - `cluster-domain=` interacts with ingress and TLS. If you set it, certs must match.
 - Operator `db-version=` only takes effect on first deploy; cross-major changes require destroy+redeploy.
+
+## PMM HA (k8s-pmm-ha, Tech Preview)
+
+| Option            | Meaning                                                       |
+|-------------------|---------------------------------------------------------------|
+| `:VERSION`        | pmm-ha chart version. Default `1.4.1` (PMM 3.7.1).            |
+| `size=small`      | Apply `configs/k8s/pmm-ha-small.yaml` so the full stack fits one k3d node (default). |
+| `size=full`       | No overrides — chart defaults, requires multi-node cluster.   |
+| `replicas=N`      | PMM Server replicas (default 3 for Raft HA).                  |
+| `password=...`    | PMM admin password (default `admin`).                         |
+| `deps=1.0.0`      | pmm-ha-dependencies (operators umbrella) chart version.       |
+| `values=path.yaml`| Extra helm values file applied on top of the small profile.   |
+| `namespace=pmm`   | Namespace (default `pmm`).                                    |
+
+**Gotchas.**
+- `size=small` is a single-node profile. Real HA needs `size=full` on a multi-node cluster — chart defaults use REQUIRED pod anti-affinity for HAProxy and PostgreSQL.
+- ClickHouse stays at 2 replicas even in the small profile: qan-api2 blocks at startup until `system.clusters` has a row with `is_local=0`, so a 1x1 CH cluster deadlocks PMM readiness.
+- HAProxy is the only supported external entry: `kubectl port-forward -n pmm svc/pmm-ha-haproxy 8443:443` then browse `https://localhost:8443`.
+- Tech Preview — not production-ready, expect breaking changes.
 
 ## Valkey
 

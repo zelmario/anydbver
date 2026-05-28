@@ -1,6 +1,6 @@
 # Products and aliases
 
-> Verified on 2026-05-07 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
+> Verified on 2026-05-28 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
 
 ## Databases
 
@@ -78,6 +78,7 @@
 | `percona-server-mongodb-operator`| `k8s-psmdb`, `k8s-mongo` | PSMDB operator                       |
 | `percona-postgresql-operator`    | `k8s-pg`                 | PostgreSQL operator                  |
 | `k8s-pmm`                        |                          | PMM inside k8s                       |
+| `k8s-pmm-ha`                     | `pmm-ha`                 | PMM HA (Tech Preview) on k8s         |
 
 ## Benchmark
 
