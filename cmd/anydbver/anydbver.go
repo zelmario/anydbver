@@ -408,6 +408,24 @@ func removeCacheImages(logger *log.Logger) {
 	}
 }
 
+// unmountNfsInContainers lazy-unmounts every NFS mount inside each of the given
+// containers. It reads /proc/mounts so it handles client mounts at any path
+// (the default /mnt/nfs as well as a custom nfs-client:mount=/path). All errors
+// are ignored: a container with no NFS mount, or one that is already gone, is a
+// no-op.
+func unmountNfsInContainers(logger *log.Logger, containers []string) {
+	env := map[string]string{}
+	errMsg := "Error unmounting NFS shares before destroy"
+	ignoreMsg := regexp.MustCompile("not found|No such|is not running|not mounted|Invalid argument|cannot")
+	for _, container := range containers {
+		args := []string{
+			"docker", "exec", container, "sh", "-c",
+			"awk '$3 ~ /^nfs/ {print $2}' /proc/mounts | xargs -r umount -l",
+		}
+		runtools.RunFatal(logger, args, errMsg, ignoreMsg, false, env)
+	}
+}
+
 func deleteNamespace(logger *log.Logger, provider string, namespace string) {
 	if provider == "docker" {
 		k3d_path, err := anydbver_common.GetK3dPath(logger)
@@ -437,6 +455,13 @@ func deleteNamespace(logger *log.Logger, provider string, namespace string) {
 		})
 
 		if len(containers_list) > 0 {
+
+			// Lazy-unmount any NFS shares inside the containers before removing
+			// them. While every container is still alive the NFS server is still
+			// responsive, so the unmount succeeds. If the server container were
+			// killed first, the client kernel would hang on the dead mount and
+			// Docker would fail with "did not receive an exit event".
+			unmountNfsInContainers(logger, containers_list)
 
 			delete_args := []string{"docker", "rm", "-f", "-v"}
 			delete_args = append(delete_args, containers_list...)
