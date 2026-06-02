@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"unicode"
 
 	anydbver_common "github.com/zelmario/anydbver/pkg/common"
@@ -1110,6 +1111,73 @@ func runOperatorTool(logger *log.Logger, namespace string, name string, run_oper
 			}
 		}
 		os.Exit(runtools.ANYDBVER_ANSIBLE_PROBLEM)
+	}
+
+	// PMM HA exposes everything as ClusterIP and HAProxy is the only supported
+	// entry point, so the UI is unreachable from the host without a tunnel.
+	// Start a background host-side port-forward (same approach as Everest) so
+	// the user can connect right after a successful deploy. Failure here is
+	// non-fatal: we fall back to printing the manual command.
+	if clusterIp != "" && strings.Contains(run_operator_args, "--pmm-ha=") {
+		k8s_namespace := "pmm"
+		if m := regexp.MustCompile(`--namespace='([^']*)'`).FindStringSubmatch(run_operator_args); m != nil {
+			k8s_namespace = m[1]
+		}
+		pmm_password := "admin"
+		if m := regexp.MustCompile(`--pmm-ha-password='([^']*)'`).FindStringSubmatch(run_operator_args); m != nil {
+			pmm_password = m[1]
+		}
+		local_port := "8443"
+
+		// HAProxy is a separate Deployment from the pmm-ha StatefulSet the
+		// deploy waits on; it commonly flips Pending->Running only as the PMM
+		// servers come up. If we forward to it while it's still Pending,
+		// kubectl exits immediately ("pod is not running, status=Pending"), so
+		// wait for it to be Available first (best-effort, host kubectl).
+		logger.Printf("Waiting for HAProxy to be ready before starting port-forward...")
+		exec.Command("kubectl", "wait", "--for=condition=Available",
+			"--timeout=180s", "-n", k8s_namespace, "deployment/pmm-ha-haproxy",
+			"--context", cluster_context).Run()
+
+		logger.Printf("Starting port-forward to PMM HA UI...")
+		kubectl_portforward := exec.Command("kubectl", "port-forward",
+			"-n", k8s_namespace, "svc/pmm-ha-haproxy", local_port+":443",
+			"--address", "0.0.0.0", "--context", cluster_context)
+		// Detach into a new session so the tunnel outlives `anydbver` exiting
+		// (terminal SIGHUP on close, parent process-group reaping, etc.) — a
+		// plain Start() child gets reaped with us and the tunnel dies.
+		kubectl_portforward.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		// Don't inherit our stdio: a write to a closed terminal would kill the
+		// detached child. Log to a file in the cache dir instead.
+		pf_log_path := filepath.Join(anydbver_common.GetCacheDirectory(logger), "pmm-ha-port-forward.log")
+		if pf_log, logErr := os.OpenFile(pf_log_path, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); logErr == nil {
+			kubectl_portforward.Stdout = pf_log
+			kubectl_portforward.Stderr = pf_log
+			defer pf_log.Close()
+		}
+		pf_err := kubectl_portforward.Start()
+
+		fmt.Println("")
+		fmt.Println("===============================================")
+		fmt.Println("PMM HA deployed successfully!")
+		fmt.Println("===============================================")
+		fmt.Println("")
+		fmt.Printf("PMM UI:   https://localhost:%s\n", local_port)
+		fmt.Println("Username: admin")
+		fmt.Printf("Password: %s\n", pmm_password)
+		fmt.Println("")
+		if pf_err == nil && kubectl_portforward.Process != nil {
+			fmt.Println("Port-forward is running in background (PID:", kubectl_portforward.Process.Pid, ")")
+			fmt.Println("To stop: kill", kubectl_portforward.Process.Pid)
+			fmt.Println("Log:    ", pf_log_path)
+		} else {
+			fmt.Println("Could not start port-forward automatically:", pf_err)
+			fmt.Println("(is kubectl installed on the host?)")
+		}
+		fmt.Println("")
+		fmt.Println("To (re)start the port-forward manually:")
+		fmt.Printf("  kubectl port-forward -n %s svc/pmm-ha-haproxy %s:443 --context %s\n", k8s_namespace, local_port, cluster_context)
+		fmt.Println("")
 	}
 }
 
