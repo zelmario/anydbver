@@ -1,6 +1,6 @@
 # Products and aliases
 
-> Verified on 2026-05-28 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
+> Verified on 2026-06-04 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
 
 ## Databases
 

@@ -26,14 +26,14 @@ description: Drive `anydbver` to spin up multi-node database test environments a
 
 Before composing a deploy, run these in order:
 
-1. `anydbver --version` — confirms binary present (current stable: v0.1.34).
+1. `anydbver --version` — confirms binary present (current stable: v0.1.35).
 2. `docker version` and group membership: `id -nG | grep -q docker || echo "user not in docker group"`.
 3. `anydbver list` — shows what's already running. **A bare `anydbver deploy` (no `--keep`) implicitly destroys whatever is in the current namespace** — confirm with the user before stepping on someone else's environment.
 4. `anydbver update` — refreshes the local version DB if versions look wrong or the user just upgraded.
 
 ## Introspection-first principle
 
-The instructions and tables below were verified on **2026-05-28**. anydbver evolves; the CLI's own help is canonical. Before emitting a non-trivial deploy command for a keyword combination you have not used in the conversation:
+The instructions and tables below were verified on **2026-06-04**. anydbver evolves; the CLI's own help is canonical. Before emitting a non-trivial deploy command for a keyword combination you have not used in the conversation:
 
 ```sh
 anydbver deploy help <keyword>      # subcommands + verbatim CLI examples

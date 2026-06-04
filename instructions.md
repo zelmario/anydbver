@@ -740,6 +740,7 @@ anydbver deploy nfs \
 ```
 
 Notes:
+- When an `nfs-client` is attached, `pgbackrest` defaults its repo to that mount (`<mount>/pgbackrest`) automatically — the explicit `pgbackrest:repo=...` above is only needed to override the path. Without an NFS client, the repo defaults to the container-local `/var/lib/pgbackrest`.
 - NFSv4 only — v2/v3 are disabled on the server, so `showmount` won't work; use `exportfs -v`.
 - The export is tmpfs-backed (overlayfs cannot be NFS-exported). Data is **ephemeral** — destroyed with the container.
 - Tear down clients before the server: a client whose server vanishes can leave a stuck mount that wedges `anydbver destroy`. If that happens, `sudo systemctl restart docker` clears it.

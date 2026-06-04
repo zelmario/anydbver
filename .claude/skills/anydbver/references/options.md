@@ -1,6 +1,6 @@
 # Options reference (per family)
 
-> Verified on 2026-05-28. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
+> Verified on 2026-06-04. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
 
 ## MySQL / Percona Server / MariaDB / mydb
 
@@ -73,11 +73,11 @@ Inherits all MySQL options above. Cluster-specific:
 | Option                                       | Meaning                                             |
 |----------------------------------------------|-----------------------------------------------------|
 | `s3=nodeN/path`                              | MinIO endpoint reference (pgbackrest, PBM).         |
-| `repo=/path`                                 | Local filesystem repo (pgbackrest).                 |
+| `repo=/path`                                 | pgbackrest repo path. Default: nfs-client mount if attached, else `/var/lib/pgbackrest`. |
 | `source=nodeN`                               | Barman backup source.                               |
 | `method=rsync` / `method=streaming-only`     | Barman backup method.                               |
 
-**Gotchas.** `pgbackrest:s3=node0` defaults to bucket name `backup`; `s3=node0/mybucket` overrides. PBM agents must run on every replica set member that should participate in backup (`pbm:latest,s3=node0/backup` on each node). For NFS-shared backup repos, use `pgbackrest:repo=/mnt/nfs/pgbackrest` together with `nfs-client:server=node0` on each node — see [`topologies.md`](topologies.md).
+**Gotchas.** `pgbackrest:s3=node0` defaults to bucket name `backup`; `s3=node0/mybucket` overrides. PBM agents must run on every replica set member that should participate in backup (`pbm:latest,s3=node0/backup` on each node). For NFS-shared backup repos, attach `nfs-client:server=node0` on each node — `pgbackrest` then defaults its repo to that mount (`<mount>/pgbackrest`) automatically; pass `pgbackrest:repo=/explicit/path` only to override — see [`topologies.md`](topologies.md).
 
 ## PMM (server + client)
 

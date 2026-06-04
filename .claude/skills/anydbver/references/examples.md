@@ -1,6 +1,6 @@
 # Examples by scenario
 
-> Verified on 2026-05-28. Every command below is a real, documented example — verbatim from `instructions.md`, `MONGO.md`, `CACHING.md`, or `anydbver deploy help <keyword>`. Versions in these examples will drift; pin explicitly when you reproduce a bug.
+> Verified on 2026-06-04. Every command below is a real, documented example — verbatim from `instructions.md`, `MONGO.md`, `CACHING.md`, or `anydbver deploy help <keyword>`. Versions in these examples will drift; pin explicitly when you reproduce a bug.
 
 Tear down between scenarios with `anydbver destroy` (or use `--namespace=<name>` to keep them parallel).
 
