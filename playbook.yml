@@ -48,6 +48,7 @@
     barman_method: "{{ lookup('vars', 'extra_barman_method', default=lookup('env', 'BARMAN_METHOD', default='') ) }}"
     barman_backup_source: "{{ lookup('vars', 'extra_barman_backup_source', default=lookup('env', 'BARMAN_SOURCE', default='') ) }}"
     pgbackrest_version: "{{ lookup('vars', 'extra_pgbackrest_version', default=lookup('env', 'PGBACKREST', default='') ) }}"
+    pgbackrest_repo: "{{ lookup('vars', 'extra_pgbackrest_repo', default=lookup('env', 'PGBACKREST_REPO', default='') ) }}"
     odyssey_version: "{{ lookup('vars', 'extra_odyssey_version', default=lookup('env', 'ODYSSEY', default='') ) }}"
     walg_version:  "{{ lookup('vars', 'extra_walg_version', default=lookup('env', 'WALG', default='') ) }}"
     percona_toolkit_version: "{{ lookup('vars', 'extra_percona_toolkit_version', default=lookup('env','PT',default='') ) }}"
@@ -232,6 +233,12 @@
         name: ca-certificates
         state: latest
         disable_gpg_check: yes
+    - name: Add 'll' alias for interactive shells
+      lineinfile:
+        path: /root/.bash_profile
+        line: "alias ll='ls -l'"
+        create: yes
+        mode: '0644'
     - name: Docker Role
       when: docker != ''
       include_role:

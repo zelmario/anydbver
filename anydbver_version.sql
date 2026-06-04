@@ -3942,6 +3942,7 @@ INSERT INTO ansible_arguments VALUES('mariadb','mysql-router','%','','extra_mysq
 INSERT INTO ansible_arguments VALUES('mariadb','nogtid','%','','extra_replication_type','nogtid',2,NULL);
 INSERT INTO ansible_arguments VALUES('mariadb','nogtid','%','','extra_db_opts_file','mysql/async-repl-nogtid.cnf',2,NULL);
 INSERT INTO ansible_arguments VALUES('pgbackrest','s3','%','','extra_minio_url','',1,NULL);
+INSERT INTO ansible_arguments VALUES('pgbackrest','repo','%','','extra_pgbackrest_repo','',1,NULL);
 INSERT INTO ansible_arguments VALUES('mariadb','galera','%','','extra_replication_type','galera',2,'');
 INSERT INTO ansible_arguments VALUES('mariadb','galera','%','','extra_db_opts_file','mariadb/galera.cnf',2,'');
 INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','version','%','VERSION','extra_pbm_version','2.7.0',1,1);
