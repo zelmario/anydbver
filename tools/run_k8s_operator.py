@@ -213,7 +213,7 @@ def run_pg_operator(ns, op, db_ver, cluster_name, op_ver, standby, backup_type, 
                   "./deploy/cr.yaml"], "enable standby in yaml")
     if db_ver != "":
         run_fatal(["sed", "-i", "-re",
-                   r"s/ppg[0-9.]+-(postgres-gis|postgres|pgbouncer|pgbackrest)[0-9.]*/ppg{}-\1/".format(db_ver),
+                   r"s/ppg[0-9.]+-(postgres-gis|postgres|pgbouncer|pgbackrest)[0-9.-]*/ppg{}-\1/".format(db_ver),
                   "./deploy/cr.yaml"], "change PG major version in images")
         set_yaml('.spec.postgresVersion={dbver}'.format(
             dbver=db_ver), "change PG major version")
