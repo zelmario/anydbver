@@ -417,13 +417,17 @@ func removeCacheImages(logger *log.Logger) {
 func unmountNfsInContainers(logger *log.Logger, containers []string) {
 	env := map[string]string{}
 	errMsg := "Error unmounting NFS shares before destroy"
-	ignoreMsg := regexp.MustCompile("not found|No such|is not running|not mounted|Invalid argument|cannot")
+	// This step is best-effort: failing to unmount must never block the
+	// destroy that follows. RunGetOutput returns the error instead of calling
+	// Fatalf, so we discard it. A container with no NFS mount, one that is
+	// already gone, or one that is wedged (exec fails with an OCI/setns error)
+	// is all the same here — a no-op that hands control to docker rm -f.
 	for _, container := range containers {
 		args := []string{
 			"docker", "exec", container, "sh", "-c",
 			"awk '$3 ~ /^nfs/ {print $2}' /proc/mounts | xargs -r umount -l",
 		}
-		runtools.RunFatal(logger, args, errMsg, ignoreMsg, false, env)
+		runtools.RunGetOutput(logger, args, errMsg, nil, false, env, runtools.COMMAND_TIMEOUT)
 	}
 }
 
