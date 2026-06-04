@@ -8,7 +8,7 @@ const (
 )
 
 var RELEASE_VERSION = "0.1.23"
-var ANSIBLE_VERSION = "0.1.34"
+var ANSIBLE_VERSION = "0.1.35"
 
 func GetDockerImageName(osver string, user string) string {
 	platform_tag := ""
