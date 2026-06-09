@@ -2332,6 +2332,104 @@ This provides a local Database-as-a-Service platform for MySQL, PostgreSQL, and 
 
 	rootCmd.AddCommand(everestCmd)
 
+	chaosCmd := &cobra.Command{
+		Use:    "chaos",
+		Short:  "Inject network faults into deployed containers (experimental)",
+		Hidden: true,
+	}
+	chaosLinkCmd := &cobra.Command{
+		Use:   "link [nodeA] [nodeB] [delay=100ms] [jitter=20ms] [loss=5%]",
+		Short: "Degrade the network link between two nodes (symmetric)",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			params, err := chaosParseParams(args[2:])
+			if err != nil {
+				logger.Fatalf("chaos: %v", err)
+			}
+			ttl, _ := cmd.Flags().GetInt("ttl")
+			if err := chaosDegradeLink(logger, provider, namespace, args[0], args[1], params, ttl); err != nil {
+				logger.Fatalf("chaos: %v", err)
+			}
+		},
+	}
+	chaosLinkCmd.Flags().Int("ttl", chaosDefaultTTLSec, "Seconds before faults auto-clear (0 to disable)")
+	chaosPartitionCmd := &cobra.Command{
+		Use:   "partition [nodeA] [nodeB]",
+		Short: "Fully sever the link between two nodes (100% packet loss both ways)",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			ttl, _ := cmd.Flags().GetInt("ttl")
+			if err := chaosPartition(logger, provider, namespace, args[0], args[1], ttl); err != nil {
+				logger.Fatalf("chaos: %v", err)
+			}
+		},
+	}
+	chaosPartitionCmd.Flags().Int("ttl", chaosDefaultTTLSec, "Seconds before the partition auto-heals (0 to disable)")
+	newChaosNodeCmd := func(action, short string) *cobra.Command {
+		return &cobra.Command{
+			Use:   action + " [node]",
+			Short: short,
+			Args:  cobra.ExactArgs(1),
+			Run: func(cmd *cobra.Command, args []string) {
+				if err := chaosNodeAction(logger, provider, namespace, args[0], action); err != nil {
+					logger.Fatalf("chaos: %v", err)
+				}
+			},
+		}
+	}
+	chaosUICmd := &cobra.Command{
+		Use:   "ui",
+		Short: "Launch the interactive chaos dashboard in a browser",
+		Run: func(cmd *cobra.Command, args []string) {
+			port, _ := cmd.Flags().GetInt("port")
+			ttl, _ := cmd.Flags().GetInt("ttl")
+			flux, _ := cmd.Flags().GetInt("flux")
+			runChaosUI(logger, provider, namespace, port, ttl, flux)
+		},
+	}
+	chaosUICmd.Flags().Int("port", 8080, "Port for the dashboard HTTP server")
+	chaosUICmd.Flags().Int("ttl", chaosDefaultTTLSec, "Seconds before faults auto-clear if the dashboard exits unexpectedly (0 to disable)")
+	chaosUICmd.Flags().Int("flux", 0, "Re-roll ranged params every N seconds (0 = off; can also toggle in the UI)")
+	chaosClearCmd := &cobra.Command{
+		Use:   "clear",
+		Short: "Remove all injected network faults in the namespace",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := chaosClearAll(logger, provider, namespace); err != nil {
+				logger.Fatalf("chaos: %v", err)
+			}
+		},
+	}
+	chaosStatusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show current network shaping per node",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := chaosStatus(logger, provider, namespace); err != nil {
+				logger.Fatalf("chaos: %v", err)
+			}
+		},
+	}
+	chaosMeasureCmd := &cobra.Command{
+		Use:   "measure [nodeA] [nodeB]",
+		Short: "Measure actual latency between two nodes (RTT + one-way ≈ RTT/2)",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := chaosMeasure(logger, provider, namespace, args[0], args[1]); err != nil {
+				logger.Fatalf("chaos: %v", err)
+			}
+		},
+	}
+	chaosCmd.AddCommand(chaosLinkCmd)
+	chaosCmd.AddCommand(chaosPartitionCmd)
+	chaosCmd.AddCommand(chaosMeasureCmd)
+	chaosCmd.AddCommand(newChaosNodeCmd("pause", "Freeze a node (docker pause)"))
+	chaosCmd.AddCommand(newChaosNodeCmd("unpause", "Unfreeze a node (docker unpause)"))
+	chaosCmd.AddCommand(newChaosNodeCmd("kill", "Hard-stop a node (docker kill)"))
+	chaosCmd.AddCommand(newChaosNodeCmd("start", "Restart a stopped node (docker start)"))
+	chaosCmd.AddCommand(chaosUICmd)
+	chaosCmd.AddCommand(chaosClearCmd)
+	chaosCmd.AddCommand(chaosStatusCmd)
+	rootCmd.AddCommand(chaosCmd)
+
 	rootCmd.PersistentFlags().StringVarP(&provider, "provider", "p", "", "Container provider")
 	rootCmd.PersistentFlags().StringVarP(&namespace, "namespace", "n", "", "Namespace")
 	rootCmd.PersistentFlags().StringVarP(&memory, "memory", "m", "", "Default memory amount per node")

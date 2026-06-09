@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>anydbver chaos</title>
+<style>
+  :root { --bg:#11151c; --panel:#1b212b; --line:#3a4452; --txt:#e6edf3; --muted:#8a97a6;
+          --green:#2ecc71; --orange:#f39c12; --red:#e74c3c; --blue:#4aa3ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt); font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px; border-bottom:1px solid var(--line); }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header .sub { color:var(--muted); font-size:13px; }
+  header .spacer { flex:1; }
+  button { background:var(--panel); color:var(--txt); border:1px solid var(--line); border-radius:6px;
+           padding:7px 12px; cursor:pointer; font-size:13px; }
+  button:hover { border-color:var(--blue); }
+  button.danger { border-color:var(--red); color:#ffb4ab; }
+  button.primary { background:var(--blue); border-color:var(--blue); color:#04121f; font-weight:600; }
+  button.on { border-color:var(--orange); color:var(--orange); }
+  #stage { display:flex; }
+  #graph { flex:1; height:calc(100vh - 53px); }
+  text { fill:var(--txt); font-size:13px; pointer-events:none; user-select:none; }
+  .hit { stroke:transparent; stroke-width:20; cursor:pointer; }
+  .lbl { fill:var(--muted); font-size:12px; }
+  .node circle { cursor:pointer; stroke:#0c1016; stroke-width:2; }
+  .node text { font-weight:600; text-anchor:middle; }
+  .node .ip { fill:#0c1016; font-size:10px; font-weight:500; opacity:.75; }
+  /* side panel */
+  #panel { width:310px; background:var(--panel); border-left:1px solid var(--line);
+           height:calc(100vh - 53px); padding:18px; display:none; overflow:auto; }
+  #panel.open { display:block; }
+  #panel hr { border:none; border-top:1px solid var(--line); margin:16px 0; }
+  .hint { color:var(--muted); font-size:11px; }
+  #panel h2 { font-size:15px; margin:0 0 4px; }
+  #panel .ctx { color:var(--muted); font-size:12px; margin-bottom:14px; }
+  #panel label { display:block; font-size:12px; color:var(--muted); margin:10px 0 3px; }
+  #panel input { width:100%; background:var(--bg); color:var(--txt); border:1px solid var(--line);
+                 border-radius:6px; padding:7px; font-size:13px; }
+  #panel .row { display:flex; gap:8px; }
+  #panel .btns { display:flex; flex-direction:column; gap:8px; margin-top:16px; }
+  .legend { display:flex; gap:14px; padding:8px 20px; color:var(--muted); font-size:12px;
+            border-bottom:1px solid var(--line); }
+  .legend span::before { content:"●"; margin-right:5px; }
+  .dot-run::before { color:var(--green); } .dot-pause::before { color:var(--orange); }
+  .dot-down::before { color:var(--red); } .dot-lat::before { color:var(--orange); }
+  .dot-part::before { color:var(--red); }
+  #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#000a;
+           border:1px solid var(--line); padding:8px 14px; border-radius:8px; display:none; }
+  /* help overlay */
+  #help { position:fixed; inset:0; background:#000b; display:none; z-index:10; }
+  #help.open { display:flex; align-items:center; justify-content:center; }
+  #help .card { background:var(--panel); border:1px solid var(--line); border-radius:10px;
+                max-width:700px; width:90%; max-height:86vh; overflow:auto; padding:22px 28px; }
+  #help h2 { margin:0; font-size:18px; }
+  #help h3 { margin:18px 0 4px; font-size:13px; color:var(--blue); text-transform:uppercase; letter-spacing:.04em; }
+  #help p, #help li { font-size:13px; color:var(--txt); }
+  #help ul { margin:4px 0; padding-left:18px; }
+  #help code { background:var(--bg); padding:1px 5px; border-radius:4px; color:var(--orange); font-size:12px; }
+  #help .x { float:right; }
+  #help .note { color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>anydbver&nbsp;chaos</h1>
+  <span class="sub" id="sub">loading…</span>
+  <span class="spacer"></span>
+  <button onclick="toggleHelp()" title="How to use the dashboard">? Help</button>
+  <button id="fluxBtn" onclick="toggleFlux()" title="Re-roll ranged params on a timer">Flux: off</button>
+  <button id="monkeyBtn" onclick="toggleMonkey()" title="Disrupt a random node periodically (click to cycle off → pause → kill)">Monkey: off</button>
+  <button onclick="fetchTopo()">↻ Refresh</button>
+  <button class="danger" onclick="clearAll()">Clear all faults</button>
+</header>
+<div class="legend">
+  <span class="dot-run">running</span><span class="dot-pause">paused</span><span class="dot-down">stopped</span>
+  &nbsp;|&nbsp;<span class="dot-lat">degraded / flapping link</span><span class="dot-part">partition</span>
+  &nbsp;·&nbsp; click a node for pause/kill · click a link to inject latency/loss/effects
+</div>
+<div id="stage">
+  <svg id="graph" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet"></svg>
+  <div id="panel"></div>
+</div>
+<div id="toast"></div>
+
+<div id="help" onclick="if(event.target===this)closeHelp()">
+  <div class="card">
+    <button class="x" onclick="closeHelp()">Close</button>
+    <h2>anydbver chaos — help</h2>
+    <p class="note">Inject network faults into the containers of a deployed namespace, live. All shaping is applied inside each container's network namespace; nothing is installed in your containers.</p>
+
+    <h3>Nodes</h3>
+    <ul>
+      <li>Colour = state: <b style="color:var(--green)">green</b> running · <b style="color:var(--orange)">orange</b> paused · <b style="color:var(--red)">red</b> stopped.</li>
+      <li>Click a node to <b>Pause</b> (freeze the process), <b>Kill</b> (hard stop), <b>Unpause</b>, or <b>Start</b> it again.</li>
+    </ul>
+
+    <h3>Links</h3>
+    <ul>
+      <li>Click any line between two nodes to shape that link. Faults are <b>symmetric</b> (applied in both directions).</li>
+      <li><b>Ctrl-click</b> (or ⌘-click) additional links to select several at once and apply the same fault to all of them.</li>
+      <li><b>Apply</b> = latency / loss / effects · <b>Partition</b> = 100% packet loss both ways · <b>Clear</b> = remove it.</li>
+    </ul>
+
+    <h3>Link parameters</h3>
+    <ul>
+      <li><b>Delay</b> — added latency, e.g. <code>100ms</code>. Note: a ping round-trip ≈ <b>2× delay</b> (applied each direction).</li>
+      <li><b>Jitter</b> — random variation on the delay, e.g. <code>20ms</code>.</li>
+      <li><b>Loss %</b> — random packet drop rate. <b>Loss corr %</b> makes the loss <b>bursty</b> (drops cluster, like a real flaky link).</li>
+      <li><b>Corrupt %</b> — random bit errors · <b>Duplicate %</b> — packets sent twice · <b>Reorder %</b> — packets delivered out of order.</li>
+      <li><b>Rate</b> — bandwidth cap, e.g. <code>1mbit</code>.</li>
+      <li><b>Ranges:</b> any field accepts <code>min-max</code> (e.g. <code>3-6</code>, <code>50-200ms</code>) — a random value is picked when applied.</li>
+    </ul>
+
+    <h3>Flux</h3>
+    <p>Header toggle. Re-rolls every <i>ranged</i> value on a timer (default 8s) so conditions keep drifting and the cluster never settles. No effect on fixed values.</p>
+
+    <h3>Chaos monkey</h3>
+    <p>Header toggle, click to cycle <b>off → pause → kill</b>. Periodically disrupts a <b>random running</b> node and auto-recovers it. Never takes down the last node standing.</p>
+
+    <h3>Flapping link</h3>
+    <p>In a link's panel, set <b>Down</b>/<b>Up</b> seconds and Start flapping — the link auto-cycles between partitioned (down) and healed (up). Drawn as a dashed orange line.</p>
+
+    <h3>Safety</h3>
+    <ul>
+      <li><b>Clear all faults</b> removes everything immediately.</li>
+      <li>All faults clear automatically when you press <b>Ctrl-C</b> in the terminal, or after the inactivity timeout (<code>--ttl</code>).</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const W=800, H=600, CX=400, CY=300, R=220, NR=36;
+let topo = {nodes:[], links:[]};
+let sel = {kind:null, node:null, links:[]};   // kind 'node'|'link'; links: [{a,b}]
+
+function key(a,b){ return a<b ? a+"|"+b : b+"|"+a; }
+function linkFor(a,b){ const k=key(a,b); return topo.links.find(l=>key(l.a,l.b)===k); }
+function nodeSelected(name){ return sel.kind==='node' && sel.node===name; }
+function linkSelected(a,b){ return sel.kind==='link' && sel.links.some(l=>key(l.a,l.b)===key(a,b)); }
+function nodeColor(s){ return s==="running"?"var(--green)":s==="paused"?"var(--orange)":"var(--red)"; }
+
+function pos(i,n){ const ang=-Math.PI/2 + i*2*Math.PI/n; return {x:CX+R*Math.cos(ang), y:CY+R*Math.sin(ang)}; }
+
+async function api(path, body){
+  const opt = body ? {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)} : {};
+  const r = await fetch(path, opt);
+  if(!r.ok){ toast("error: "+(await r.text()).trim()); throw new Error(await r.text()); }
+  return r.json();
+}
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.style.display="block";
+  clearTimeout(t._h); t._h=setTimeout(()=>t.style.display="none", 3000); }
+
+async function fetchTopo(){
+  try { topo = await api("/api/topology"); render(); }
+  catch(e){ document.getElementById("sub").textContent = "cannot reach server"; }
+}
+
+function fxLabel(l){
+  if(l.flapping) return "⟳ flap";
+  if(l.partition) return "✕ partition";
+  let t = l.delay || "";
+  if(l.loss && l.loss!=="0" && l.loss!=="0%") t += (t?" · ":"") + l.loss + " loss";
+  if(l.corrupt||l.duplicate||l.reorder||l.rate) t += " +fx";
+  return t || "shaped";
+}
+
+function render(){
+  const n = topo.nodes.length;
+  const flux = topo.flux||0, mk = topo.monkey||{};
+  document.getElementById("sub").textContent =
+    n + " node" + (n===1?"":"s") + " · " + topo.links.length + " active fault" + (topo.links.length===1?"":"s");
+  const fb=document.getElementById("fluxBtn");
+  fb.textContent = "Flux: " + (flux>0? flux+"s":"off"); fb.className = flux>0?"on":"";
+  const mb=document.getElementById("monkeyBtn");
+  mb.textContent = "Monkey: " + (mk.enabled? mk.mode+" "+mk.interval+"s":"off"); mb.className = mk.enabled?"on":"";
+  const svg = document.getElementById("graph");
+  const P = topo.nodes.map((_,i)=>pos(i,n));
+  let s = "";
+
+  // links: every pair, active ones highlighted
+  for(let i=0;i<n;i++) for(let j=i+1;j<n;j++){
+    const a=topo.nodes[i].node, b=topo.nodes[j].node;
+    const l=linkFor(a,b);
+    const x1=P[i].x,y1=P[i].y,x2=P[j].x,y2=P[j].y;
+    let col="var(--line)", wid=1.5, dash="";
+    if(l){ if(l.flapping){ col="var(--orange)"; wid=3; dash='stroke-dasharray="3 4"'; }
+           else if(l.partition){ col="var(--red)"; wid=3; dash='stroke-dasharray="7 5"'; }
+           else { col="var(--orange)"; wid=3; } }
+    if(linkSelected(a,b))
+      s += `<line x1=${x1} y1=${y1} x2=${x2} y2=${y2} stroke="var(--red)" stroke-width="${wid+7}" stroke-linecap="round" opacity=".4" pointer-events="none"></line>`;
+    s += `<line class="hit" x1=${x1} y1=${y1} x2=${x2} y2=${y2} onclick="openLink(event,'${a}','${b}')"></line>`;
+    s += `<line x1=${x1} y1=${y1} x2=${x2} y2=${y2} stroke="${col}" stroke-width="${wid}" ${dash} pointer-events="none"></line>`;
+    if(l){ const mx=(x1+x2)/2, my=(y1+y2)/2; const txt=fxLabel(l);
+      s += `<rect x=${mx-46} y=${my-11} width=92 height=18 rx=4 fill="var(--bg)" opacity=".85"></rect>`;
+      s += `<text class="lbl" x=${mx} y=${my+3} text-anchor="middle">${txt}</text>`; }
+  }
+  // nodes
+  topo.nodes.forEach((nd,i)=>{
+    const ring = nodeSelected(nd.node)
+      ? `<circle cx=${P[i].x} cy=${P[i].y} r=${NR+6} style="fill:none;stroke:var(--red);stroke-width:3"></circle>` : "";
+    s += `<g class="node" onclick="openNode(event,'${nd.node}')">${ring}
+      <circle cx=${P[i].x} cy=${P[i].y} r=${NR} fill="${nodeColor(nd.state)}"></circle>
+      <text x=${P[i].x} y=${P[i].y-2}>${nd.node}</text>
+      <text class="ip" x=${P[i].x} y=${P[i].y+13}>${nd.ip||nd.state}</text></g>`;
+  });
+  svg.innerHTML = s;
+}
+
+function panel(html){ const p=document.getElementById("panel"); p.innerHTML=html+
+  `<div class="btns"><button onclick="closePanel()">Close</button></div>`; p.classList.add("open"); }
+function closePanel(){ document.getElementById("panel").classList.remove("open"); sel={kind:null,node:null,links:[]}; render(); }
+
+function fld(label,id,v,ph){ return `<div style="flex:1"><label>${label}</label><input id="${id}" value="${v||''}" placeholder="${ph||''}"></div>`; }
+
+function openLink(ev,a,b){
+  const additive = ev && (ev.ctrlKey || ev.metaKey);
+  if(additive && sel.kind==='link'){
+    const k=key(a,b), i=sel.links.findIndex(x=>key(x.a,x.b)===k);
+    if(i>=0) sel.links.splice(i,1); else sel.links.push({a,b});
+  } else {
+    sel={kind:'link', node:null, links:[{a,b}]};
+  }
+  render();
+  if(sel.links.length===0){ closePanel(); return; }
+  linkPanel();
+}
+
+function linkPanel(){
+  const multi = sel.links.length>1;
+  const l = multi ? {} : (linkFor(sel.links[0].a, sel.links[0].b) || {});
+  const each = f => sel.links.some(x=>{ const ll=linkFor(x.a,x.b)||{}; return f(ll); });
+  const anyBase = each(ll=>ll.delay||ll.loss||ll.corrupt||ll.duplicate||ll.reorder||ll.rate);
+  const anyFlap = each(ll=>ll.flapping);
+  const title = multi ? `${sel.links.length} links selected`
+                      : `${sel.links[0].a} &nbsp;⇄&nbsp; ${sel.links[0].b}`;
+  const subtxt = multi ? sel.links.map(x=>x.a+"–"+x.b).join(", ") : "network link";
+  const flapBtns = multi
+    ? `<button onclick="flapLinks(true)">Start flapping all</button><button class="on" onclick="flapLinks(false)">Stop flapping all</button>`
+    : (anyFlap ? `<button class="on" onclick="flapLinks(false)">Stop flapping</button>`
+               : `<button onclick="flapLinks(true)">Start flapping</button>`);
+  const meas = multi ? "" :
+    `<div class="btns" style="margin:0 0 4px"><button onclick="measure('${sel.links[0].a}','${sel.links[0].b}')">Measure latency</button></div>
+     <div id="measResult" class="hint" style="margin-bottom:6px"></div>`;
+  panel(`<h2>${title}</h2>
+    <div class="ctx">${subtxt} · <span class="hint">Ctrl-click links to (de)select more. Ranges ok: <b>3-6</b>, <b>50-200ms</b>.</span></div>
+    ${meas}
+    <div class="row">${fld("Delay","delay",l.delay||"100ms")}${fld("Jitter","jitter",l.jitter||"20ms")}</div>
+    <div class="row">${fld("Loss %","loss",l.loss||"0")}${fld("Loss corr % (bursty)","losscorr",l.losscorr,"e.g. 25")}</div>
+    <div class="row">${fld("Corrupt %","corrupt",l.corrupt)}${fld("Duplicate %","duplicate",l.duplicate)}</div>
+    <div class="row">${fld("Reorder %","reorder",l.reorder)}${fld("Rate","rate",l.rate,"e.g. 1mbit")}</div>
+    <div class="btns">
+      <button class="primary" onclick="setLinks(false)">Apply${multi?" to all":""}</button>
+      <button class="danger" onclick="setLinks(true)">Partition${multi?" all":" (100% loss)"}</button>
+      ${anyBase?`<button onclick="clearLinks()">Clear ${multi?"these links":"this link"}</button>`:""}
+    </div>
+    <hr>
+    <div class="ctx">Flapping — auto-cycle partition ↔ baseline. <span class="hint">A degrade set above is what the link drops to between partitions (not fully healed).</span></div>
+    <div class="row">${fld("Down (s)","flapdown","5")}${fld("Up (s)","flapup","10")}</div>
+    <div class="btns">${flapBtns}</div>`);
+}
+function linkBody(partition){
+  const b={enabled:true,partition};
+  if(!partition){ b.delay=val("delay"); b.jitter=val("jitter"); b.loss=val("loss");
+    b.losscorr=val("losscorr"); b.corrupt=val("corrupt"); b.duplicate=val("duplicate");
+    b.reorder=val("reorder"); b.rate=val("rate"); }
+  return b;
+}
+async function setLinks(partition){
+  const base=linkBody(partition);
+  const ops=sel.links.map(l=>Object.assign({a:l.a,b:l.b}, base));
+  await api("/api/links",{ops});
+  toast((partition?"partitioned ":"degraded ")+ops.length+" link"+(ops.length>1?"s":""));
+  closePanel(); fetchTopo();
+}
+async function clearLinks(){
+  const ops=sel.links.map(l=>({a:l.a,b:l.b,enabled:false}));
+  await api("/api/links",{ops}); toast("cleared "+ops.length+" link"+(ops.length>1?"s":"")); closePanel(); fetchTopo();
+}
+async function flapLinks(enabled){
+  const down=parseInt(val("flapdown")||"5"), up=parseInt(val("flapup")||"10");
+  await Promise.all(sel.links.map(l=>api("/api/flap",{a:l.a,b:l.b,down,up,enabled})));
+  toast((enabled?"flapping ":"flap off ")+sel.links.length+" link"+(sel.links.length>1?"s":"")); closePanel(); fetchTopo();
+}
+function val(id){ const e=document.getElementById(id); return e?e.value.trim():""; }
+
+async function measure(a,b){
+  const r=document.getElementById("measResult"); if(r) r.textContent="measuring…";
+  try{
+    const m=await api("/api/measure",{a,b});
+    const ll=linkFor(a,b)||{};
+    const ind=(ll.delay || "none") + (ll.delay && ll.jitter ? " ±"+ll.jitter : "");
+    let out;
+    if(m.loss>=100) out=`Induced: ${ind} (measured: unreachable, 100% loss)`;
+    else out=`Induced: ${ind} (measured: ${m.oneway.toFixed(1)}ms · RTT ${m.rtt.toFixed(1)}ms${m.loss>0?", "+m.loss+"% loss":""})`;
+    if(r) r.textContent=out;
+  }catch(e){ if(r) r.textContent="measure failed"; }
+}
+
+function openNode(ev,name){
+  sel={kind:'node', node:name, links:[]}; render();
+  const nd=topo.nodes.find(x=>x.node===name)||{};
+  let acts="";
+  if(nd.state==="running") acts=`<button onclick="nodeAct('${name}','pause')">Pause (freeze)</button>
+    <button class="danger" onclick="nodeAct('${name}','kill')">Kill (hard stop)</button>`;
+  else if(nd.state==="paused") acts=`<button class="primary" onclick="nodeAct('${name}','unpause')">Unpause</button>
+    <button class="danger" onclick="nodeAct('${name}','kill')">Kill (hard stop)</button>`;
+  else acts=`<button class="primary" onclick="nodeAct('${name}','start')">Start</button>`;
+  panel(`<h2>${name}</h2><div class="ctx">state: ${nd.state} &nbsp;·&nbsp; ${nd.ip||"no ip"}</div>
+    <div class="btns">${acts}</div>`);
+}
+async function nodeAct(name,action){ await api("/api/node",{node:name,action}); toast(`${action} ${name}`); closePanel(); fetchTopo(); }
+
+async function clearAll(){ await api("/api/clear",{}); toast("cleared all faults"); closePanel(); fetchTopo(); }
+
+async function toggleFlux(){
+  const on=(topo.flux||0)>0;
+  await api("/api/flux",{interval:on?0:8});
+  toast(on?"flux off":"flux: re-roll ranges every 8s"); fetchTopo();
+}
+async function toggleMonkey(){
+  const mk=topo.monkey||{}; let next;
+  if(!mk.enabled) next={enabled:true,mode:"pause",interval:15};
+  else if(mk.mode==="pause") next={enabled:true,mode:"kill",interval:15};
+  else next={enabled:false};
+  await api("/api/monkey", next);
+  toast("monkey: "+(next.enabled?next.mode+" every "+next.interval+"s":"off")); fetchTopo();
+}
+
+function toggleHelp(){ document.getElementById("help").classList.toggle("open"); }
+function closeHelp(){ document.getElementById("help").classList.remove("open"); }
+document.addEventListener("keydown", e=>{ if(e.key==="Escape"){ closeHelp(); closePanel(); } });
+
+fetchTopo();
+setInterval(fetchTopo, 3000);
+</script>
+</body>
+</html>
