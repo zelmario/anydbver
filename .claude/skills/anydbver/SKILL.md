@@ -1,6 +1,6 @@
 ---
 name: anydbver
-description: Drive `anydbver` to spin up multi-node database test environments as Docker containers (or nested K3D clusters) — Percona Server / MySQL / MariaDB / PXC, PostgreSQL / Percona PG, PSMDB / MongoDB, Valkey, plus the surrounding stack (Patroni, repmgr, ProxySQL, Orchestrator, HAProxy, pgbouncer, pgbackrest, Barman, PBM, xtrabackup, PMM 2.x/3.x, PMM HA Tech Preview on k8s, MinIO, NFS, LDAP, Kerberos, sysbench, Percona operators on K3D). Use when the user wants to spin up Mongo locally, armar una réplica de Postgres, build a 3-node PXC cluster, set up Patroni HA, reproducir un bug en MySQL 8.4 / PSMDB 8.0, run local k8s with the Percona PG operator, levantar PMM monitoreando varias DBs, reproducir un ticket de PMM HA, or tirar abajo el ambiente. Triggers on `anydbver`, `psmdb:`, `ps:`, `pxc:`, `pg:`, `ppg:`, `pgbackrest:s3=`, `mongos-shard`, `replica-set=`, `role=shard`, `master=node0`, `master=default`, `kerberos-server=`, `nfs-client:server=`, `pmm-client:3.7.0-7,server=node0:8443`, `k3d:`, `k8s-pg`, `k8s-pxc`, `k8s-psmdb`, `k8s-pmm-ha`, `pmm-ha:`, `cache:`. This skill does **not** apply to production deployments, managed services (Atlas / RDS / CloudSQL / Cosmos), or diagnosing problems in already-running systems unrelated to anydbver.
+description: Drive `anydbver` to spin up multi-node database test environments as Docker containers (or nested K3D clusters) — Percona Server / MySQL / MariaDB / PXC, PostgreSQL / Percona PG, PSMDB / MongoDB, Valkey, plus the surrounding stack (Patroni, repmgr, ProxySQL, Orchestrator, HAProxy, pgbouncer, pgbackrest, Barman, PBM, xtrabackup, PMM 2.x/3.x, PMM HA Tech Preview on k8s, MinIO, NFS, LDAP, Kerberos, sysbench, Percona operators on K3D). Use when the user wants to spin up Mongo locally, armar una réplica de Postgres, build a 3-node PXC cluster, set up Patroni HA, reproducir un bug en MySQL 8.4 / PSMDB 8.0, run local k8s with the Percona PG operator, levantar PMM monitoreando varias DBs, reproducir un ticket de PMM HA, or tirar abajo el ambiente. Also drives the experimental `chaos` command to inject network faults (latency / loss / partition / node kill) into a deployed environment for HA / failover testing. Triggers on `anydbver`, `psmdb:`, `ps:`, `pxc:`, `pg:`, `ppg:`, `pgbackrest:s3=`, `mongos-shard`, `replica-set=`, `role=shard`, `master=node0`, `master=default`, `kerberos-server=`, `nfs-client:server=`, `pmm-client:3.7.0-7,server=node0:8443`, `k3d:`, `k8s-pg`, `k8s-pxc`, `k8s-psmdb`, `k8s-pmm-ha`, `pmm-ha:`, `cache:`, `chaos`, `chaos link`, `chaos partition`, `chaos ui`. This skill does **not** apply to production deployments, managed services (Atlas / RDS / CloudSQL / Cosmos), or diagnosing problems in already-running systems unrelated to anydbver.
 ---
 
 # anydbver
@@ -121,6 +121,28 @@ Each is self-contained: prereq → command → expected layout → verification 
 - **H. Multi-DB / cross-product** (one PMM monitoring three DBs; side-by-side via `--namespace=`). → [`references/examples.md#multi-db`](references/examples.md#multi-db)
 - **I. Cleanup and namespaces** — `--keep` for additive growth, `--namespace=` for parallel envs, `destroy --remove-cache`. → [`references/examples.md#environment`](references/examples.md#environment)
 - **J. `install` + `cache:`** — pre-bake images for repeated deploys; great for bug-repro loops. → [`references/docker-image-and-cache.md`](references/docker-image-and-cache.md)
+- **K. Network chaos** — degrade / partition / kill nodes of an already-deployed cluster to test HA, failover, split-brain, leader re-election. → see *Chaos* below.
+
+## Chaos — network fault injection (experimental)
+
+Operates on an **already-deployed** environment — no redeploy. `chaos` is a **hidden** command (not in `anydbver --help`); use `anydbver chaos --help`. Faults are applied with `tc`/`netem` **inside each container's netns** via a throwaway helper container (default image `gaiadocker/iproute2`, override `ANYDBVER_TC_IMAGE`), so it works on native Linux **and** Docker Desktop / WSL2 with no host `sudo`.
+
+```sh
+anydbver chaos link node0 node1 delay=120ms loss=5%   # symmetric degrade
+anydbver chaos partition node0 node1                  # 100% loss both ways
+anydbver chaos pause node1                            # also unpause / kill / start
+anydbver chaos status                                # current shaping per node
+anydbver chaos measure node0 node1                   # real RTT + one-way + loss
+anydbver chaos clear                                 # remove all faults
+anydbver chaos ui                                    # topology dashboard @ :8080
+```
+
+`chaos link` params (each also accepts a `min-max` range): `delay= jitter= loss= corrupt= dup= reorder= rate= corr=`.
+
+- **Links are symmetric → RTT ≈ 2× `delay`** (each one-way trip pays the delay once). Use `chaos measure` for the real numbers; one-way ≈ RTT/2 is the apples-to-apples comparison to the induced per-direction delay.
+- **Dead-man switch:** every fault auto-clears after `--ttl` seconds (default 3600; `--ttl 0` disables). The `ui` clears on exit and on an inactivity timer.
+- **Teardown is safe:** `anydbver destroy` auto-unpauses any chaos-paused node and tc shaping dies with the container's netns — no manual `chaos clear` needed before destroy.
+- The dashboard adds click-to-degrade, multi-select (Ctrl/⌘-click), link flapping, flux (drifting ranged values), and a chaos monkey.
 
 ## Decision points worth stopping on
 

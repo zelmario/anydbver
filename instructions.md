@@ -37,8 +37,9 @@ If you only read one section, read [Command Anatomy](#command-anatomy) and
 9. [Docker-image mode](#docker-image-mode)
 10. [Speeding up deploys with `install` + `cache`](#speeding-up-deploys-with-install--cache)
 11. [Managing the environment](#managing-the-environment)
-12. [Getting help from the CLI](#getting-help-from-the-cli)
-13. [Troubleshooting](#troubleshooting)
+12. [Injecting network faults (chaos)](#injecting-network-faults-chaos)
+13. [Getting help from the CLI](#getting-help-from-the-cli)
+14. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -859,6 +860,116 @@ anydbver --namespace=ns1 destroy
 - Default: Docker containers.
 - `--provider=kubectl`: deploy against an already-running Kubernetes
   cluster. (Does not manage the cluster itself.)
+
+---
+
+## Injecting network faults (chaos)
+
+> **Experimental.** The `chaos` command lets you degrade, partition, or
+> kill nodes in a running deployment so you can watch how a cluster reacts
+> to a bad network or a dead member — replication lag, failover,
+> split-brain, leader re-election, and so on. It is a **hidden** command
+> (it won't show in `anydbver --help`); run `anydbver chaos --help` to see
+> it.
+
+Chaos works on an environment you have **already deployed**. It shapes the
+real network between containers — no redeploy needed — and it is fully
+reversible.
+
+### How it works
+
+Faults are applied with Linux `tc`/`netem` **inside each target
+container's network namespace**, via a throwaway helper container
+(default image `gaiadocker/iproute2`, override with `ANYDBVER_TC_IMAGE`).
+This works identically on native Linux and on Docker Desktop / WSL2, with
+no host `sudo` and no privileged access to the host network.
+
+- A link is **symmetric**: shaping is applied on both endpoints, so a
+  `delay=100ms` link shows up as roughly **200ms round-trip** (each
+  one-way trip pays the delay once). Use `chaos measure` to see the real
+  numbers.
+- Every fault is armed with a **dead-man switch** (`--ttl`, default 3600s)
+  so a forgotten fault auto-clears. Pass `--ttl 0` to disable.
+- `anydbver destroy` always cleans up: tc shaping dies with each
+  container's namespace, and any chaos-paused node is automatically
+  unpaused first so the teardown never wedges.
+
+### CLI subcommands
+
+```sh
+# Degrade the link between two nodes (symmetric). Any of delay/jitter/loss:
+anydbver chaos link node0 node1 delay=120ms jitter=20ms loss=5%
+
+# Fully sever a link (100% packet loss both ways) — partition / split-brain:
+anydbver chaos partition node0 node1
+
+# Node lifecycle (docker pause/unpause/kill/start):
+anydbver chaos pause node1        # freeze (process still in memory)
+anydbver chaos unpause node1
+anydbver chaos kill node1         # hard stop (SIGKILL)
+anydbver chaos start node1        # bring a stopped node back
+
+# Inspect and measure:
+anydbver chaos status             # current shaping per node
+anydbver chaos measure node0 node1  # actual RTT + one-way (≈RTT/2) + loss
+
+# Remove every injected fault in the namespace:
+anydbver chaos clear
+```
+
+### Fault parameters
+
+Any of these `key=value` items can be combined on a `chaos link` (and in
+the dashboard). Numeric values also accept a **`min-max` range**
+(e.g. `loss=3-6`, `delay=50-200ms`), re-rolled on each apply:
+
+| Param                    | Meaning                                            |
+|--------------------------|----------------------------------------------------|
+| `delay=100ms`            | Per-direction latency                              |
+| `jitter=20ms`            | Latency variation                                  |
+| `loss=5%`                | Packet loss                                        |
+| `corr=25%` / `losscorr=` | Loss correlation (bursty loss)                     |
+| `corrupt=1%`             | Bit-level corruption                               |
+| `dup=1%` / `duplicate=`  | Packet duplication                                 |
+| `reorder=10%`            | Packet reordering (auto-adds a small delay)        |
+| `rate=1mbit` / `bw=`     | Bandwidth cap                                      |
+
+### Interactive dashboard
+
+```sh
+anydbver chaos ui                 # serves http://localhost:8080, opens a browser
+anydbver chaos ui --port 9090 --flux 8
+```
+
+The dashboard is a self-contained web UI (no external JS/CDN) that draws
+the namespace as a ring topology. From it you can:
+
+- Click a link to degrade or partition it; **Ctrl/⌘-click** to select and
+  act on several links at once.
+- Apply latency / loss / jitter / the netem effects above, including
+  ranges and **flux** (re-roll ranged values over time for drifting
+  conditions).
+- **Flap** a link (cycle partition ↔ baseline) and have a degrade and a
+  flap coexist on the same link.
+- Pause / kill / start nodes, or turn on the **chaos monkey** to randomly
+  disrupt and recover nodes on an interval.
+- **Measure** induced-vs-actual latency on a link.
+
+The dashboard clears all faults on exit (Ctrl-C) and via an inactivity
+dead-man timer, so a closed laptop can't leave a cluster crippled.
+
+### Example: trigger a Patroni failover
+
+```sh
+# Deploy a 3-node Patroni cluster, then partition the leader off:
+anydbver deploy ppg:17 patroni:cluster=c1 \
+  node1 ppg:17,master=node0 patroni:master=node0,cluster=c1 \
+  node2 ppg:17,master=node0 patroni:master=node0,cluster=c1
+anydbver chaos partition node0 node1   # cut node0 off from node1
+anydbver chaos partition node0 node2   # ...and node2 → node0 loses quorum
+# watch a new leader get elected, then heal:
+anydbver chaos clear
+```
 
 ---
 

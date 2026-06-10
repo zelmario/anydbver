@@ -26,11 +26,11 @@ import (
 	"syscall"
 	"unicode"
 
+	"github.com/spf13/cobra"
 	anydbver_common "github.com/zelmario/anydbver/pkg/common"
 	"github.com/zelmario/anydbver/pkg/runtools"
 	unmodified_docker "github.com/zelmario/anydbver/pkg/unmodified_docker"
 	versionfetch "github.com/zelmario/anydbver/pkg/version_fetch"
-	"github.com/spf13/cobra"
 	"golang.org/x/term"
 	_ "modernc.org/sqlite"
 )
@@ -431,6 +431,23 @@ func unmountNfsInContainers(logger *log.Logger, containers []string) {
 	}
 }
 
+// unpauseChaosContainers unpauses every paused container in the given list. The
+// chaos feature (chaos pause / the chaos monkey) can leave a container paused; a
+// paused container cannot receive the SIGKILL that docker rm -f sends, so destroy
+// could wedge on it the same way a live NFS mount wedges the kernel. Unpausing
+// first is best-effort: a container that is not paused (or already gone) makes
+// docker unpause error harmlessly, and we discard that error so nothing blocks
+// the destroy that follows.
+func unpauseChaosContainers(logger *log.Logger, containers []string) {
+	env := map[string]string{}
+	errMsg := "Error unpausing container before destroy"
+	ignoreMsg := regexp.MustCompile("is not paused|No such container|not running")
+	for _, container := range containers {
+		args := []string{"docker", "unpause", container}
+		runtools.RunGetOutput(logger, args, errMsg, ignoreMsg, false, env, runtools.COMMAND_TIMEOUT)
+	}
+}
+
 func deleteNamespace(logger *log.Logger, provider string, namespace string) {
 	if provider == "docker" {
 		k3d_path, err := anydbver_common.GetK3dPath(logger)
@@ -468,6 +485,16 @@ func deleteNamespace(logger *log.Logger, provider string, namespace string) {
 			// Docker would fail with "did not receive an exit event".
 			unmountNfsInContainers(logger, containers_list)
 
+			// Unpause any chaos-paused container so docker rm -f can deliver its
+			// SIGKILL. Best-effort: tc netem shaping needs no cleanup here, it
+			// dies with each container's network namespace on removal.
+			unpauseChaosContainers(logger, containers_list)
+
+			// Remove any chaos helper containers (they join a node's netns via
+			// --net=container:, so they aren't on the namespace network and would
+			// otherwise be orphaned when their node is removed).
+			chaosCleanupHelpers(logger, "docker", namespace)
+
 			delete_args := []string{"docker", "rm", "-f", "-v"}
 			delete_args = append(delete_args, containers_list...)
 			runtools.RunFatal(logger, delete_args, errMsg, ignoreMsg, true, env)
@@ -475,6 +502,9 @@ func deleteNamespace(logger *log.Logger, provider string, namespace string) {
 		delete_args := []string{"docker", "network", "rm", net}
 		runtools.RunFatal(logger, delete_args, errMsg, ignoreMsg, true, env)
 		os.Remove(anydbver_common.GetAnsibleInventory(logger, namespace))
+		// Drop the chaos link state so a later redeploy of this namespace can't
+		// resurrect stale faults from a previous run.
+		os.Remove(chaosStatePath(logger, namespace))
 
 	}
 }
@@ -2105,8 +2135,6 @@ func main() {
 		Commit = commit
 		Build = date
 	}
-
-
 
 	logger := log.New(os.Stdout, "", log.LstdFlags)
 

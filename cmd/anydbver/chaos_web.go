@@ -102,63 +102,12 @@ func (s *chaosServer) effectiveLinks() []chaosLinkState {
 // helper-container run per shaped container (also in parallel) — keeping the UI
 // snappy regardless of how many links are active.
 func (s *chaosServer) reconcile() {
-	nodes, err := chaosListNodes(s.logger, s.provider, s.namespace)
-	if err != nil {
+	// effectiveLinks() merges the baseline degrade set with any flap overlay;
+	// chaosReconcileLinks rebuilds every node with one netem band per peer, so a
+	// node in several links with different profiles shapes each peer independently.
+	if err := chaosReconcileLinks(s.logger, s.provider, s.namespace, s.effectiveLinks()); err != nil {
 		s.logger.Printf("chaos-ui: reconcile: %v", err)
-		return
 	}
-	byName := map[string]chaosNode{}
-	for _, n := range nodes {
-		byName[n.Node] = n
-	}
-
-	// Aggregate per-container: every peer IP it must filter, plus the netem
-	// profile (one band per container, so the last link's params win — matches
-	// the single-band model; mixing distinct profiles on one node is a known v2).
-	type agg struct {
-		params chaosNetemParams
-		peers  []string
-	}
-	perContainer := map[string]*agg{}
-	add := func(self, peer chaosNode, p chaosNetemParams) {
-		if self.IP == "" || peer.IP == "" {
-			return
-		}
-		a := perContainer[self.Container]
-		if a == nil {
-			a = &agg{}
-			perContainer[self.Container] = a
-		}
-		a.params = p
-		a.peers = append(a.peers, peer.IP)
-	}
-	for _, l := range s.effectiveLinks() {
-		a, b := byName[l.A], byName[l.B]
-		add(a, b, l.Params)
-		add(b, a, l.Params)
-	}
-
-	// One parallel phase: each reachable node is either rebuilt cleanly (shaped,
-	// reset=true fuses clear+arm+filters into one helper run) or just cleared.
-	var wg sync.WaitGroup
-	for _, n := range nodes {
-		if n.State != "running" && n.State != "paused" {
-			continue
-		}
-		wg.Add(1)
-		go func(c string) {
-			defer wg.Done()
-			if a := perContainer[c]; a != nil {
-				if err := chaosShapeContainer(s.logger, c, a.params, a.peers, true); err != nil {
-					s.logger.Printf("chaos-ui: shape %s: %v", c, err)
-				}
-			} else {
-				chaosClearContainer(s.logger, c)
-			}
-		}(n.Container)
-	}
-	wg.Wait()
-
 	s.armDeadman()
 }
 

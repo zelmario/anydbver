@@ -113,11 +113,21 @@
       <li><b>Ranges:</b> any field accepts <code>min-max</code> (e.g. <code>3-6</code>, <code>50-200ms</code>) — a random value is picked when applied.</li>
     </ul>
 
-    <h3>Flux</h3>
-    <p>Header toggle. Re-rolls every <i>ranged</i> value on a timer (default 8s) so conditions keep drifting and the cluster never settles. No effect on fixed values.</p>
+    <h3>Flux — drifting fault values</h3>
+    <p>Header toggle (default every 8s). Normally a link's value is rolled <b>once</b>, when you apply it. Flux <b>re-rolls every <i>ranged</i> value</b> on a timer, so the network conditions keep wandering instead of staying constant — a realistic flaky/congested link rather than a clean fixed degradation.</p>
+    <ul>
+      <li>Only affects <b>ranges</b>: <code>delay=50-250ms</code> drifts (80ms… 140ms… 210ms…); <code>delay=100ms</code> never changes.</li>
+      <li>To see it: apply a ranged link, toggle Flux on, then re-run <b>Measure</b> a few times — the latency/loss keeps changing.</li>
+    </ul>
 
-    <h3>Chaos monkey</h3>
-    <p>Header toggle, click to cycle <b>off → pause → kill</b>. Periodically disrupts a <b>random running</b> node and auto-recovers it. Never takes down the last node standing.</p>
+    <h3>Chaos monkey — random node failures</h3>
+    <p>Header toggle, click to cycle <b>off → pause → kill</b>. Every interval it picks a <b>random running</b> node, disrupts it, and auto-recovers it after half the interval — then picks another, forever. You don't choose which node or when, so it tests whether the cluster survives losing an <i>arbitrary</i> member at an <i>arbitrary</i> moment (failover, re-election, replica promotion).</p>
+    <ul>
+      <li><b>pause</b> — freezes a node (<code>docker pause</code>): it hangs but keeps its connections (like a GC pause / frozen VM), then unpauses.</li>
+      <li><b>kill</b> — hard-stops a node (<code>docker kill</code>): a crash / power loss, then restarts it.</li>
+      <li>Never acts when fewer than 2 nodes are running, so it can't take the whole cluster down.</li>
+      <li>Independent of links — Monkey disrupts whole <i>nodes</i>, Flux re-rolls <i>link</i> faults. You can run both at once.</li>
+    </ul>
 
     <h3>Flapping link</h3>
     <p>In a link's panel, set <b>Down</b>/<b>Up</b> seconds and Start flapping — the link auto-cycles between partitioned (down) and healed (up). Drawn as a dashed orange line.</p>

@@ -167,6 +167,29 @@ You may redirect or pipe STDIN and STDOUT for automation, e.g.
 echo show variables | anydbver exec node1 -- mysql|grep gtid_mode|grep -q OFF
 ```
 
+# Injecting network faults (chaos)
+Once an environment is deployed you can degrade, partition, or kill nodes to see how the cluster reacts (replication lag, failover, split-brain, leader re-election). This is an experimental, **hidden** command — see `anydbver chaos --help`.
+
+Faults are applied with `tc`/`netem` inside each container's network namespace (works on native Linux and Docker Desktop / WSL2 alike), are fully reversible, and auto-clear after a TTL (default 1h, `--ttl 0` disables). `anydbver destroy` always cleans up.
+```
+# Degrade / sever a link between two nodes (symmetric — RTT ≈ 2× delay):
+anydbver chaos link node0 node1 delay=120ms loss=5%
+anydbver chaos partition node0 node1
+
+# Node lifecycle:
+anydbver chaos pause node1     # also: unpause / kill / start
+
+# Inspect, measure, clean up:
+anydbver chaos status
+anydbver chaos measure node0 node1
+anydbver chaos clear
+```
+`chaos link` accepts `delay= jitter= loss= corrupt= dup= reorder= rate= corr=` (each also takes a `min-max` range). For a topology graph with click-to-degrade, link flapping, a chaos monkey, and live latency measurement, launch the dashboard:
+```
+anydbver chaos ui     # serves http://localhost:8080 and opens a browser
+```
+The tc helper uses the `gaiadocker/iproute2` image by default (override with `ANYDBVER_TC_IMAGE`).
+
 # Destroying environment
 anydbver is intended for short-term tests and you can remove all traces for deployment with:
 ```
