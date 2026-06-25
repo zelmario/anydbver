@@ -3426,7 +3426,7 @@ INSERT INTO general_version VALUES('1.0.17-4','el8','x86_64','sysbench');
 INSERT INTO general_version VALUES('1.0.18-6','el8','x86_64','sysbench');
 INSERT INTO general_version VALUES('1.0.19-6','el8','x86_64','sysbench');
 INSERT INTO general_version VALUES('1.0.20-6','el8','x86_64','sysbench');
-INSERT INTO general_version VALUES('0.1.23','','','anydbver');
+INSERT INTO general_version VALUES('0.1.37','','','anydbver');
 INSERT INTO general_version VALUES('3.1.4-1','el8','x86_64','percona-orchestrator');
 INSERT INTO general_version VALUES('3.2.4-1','el8','x86_64','percona-orchestrator');
 INSERT INTO general_version VALUES('3.2.5-1','el8','x86_64','percona-orchestrator');
@@ -3861,6 +3861,10 @@ INSERT INTO ansible_arguments VALUES('postgresql','version','%','VERSION','extra
 INSERT INTO ansible_arguments VALUES('postgresql','user','%','','extra_db_user','postgres',1,1);
 INSERT INTO ansible_arguments VALUES('postgresql','master','%','NODE','extra_master_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('postgresql','cluster','%','','extra_cluster_name','cluster1',1,1);
+INSERT INTO ansible_arguments VALUES('postgresql','wal','%','','extra_replication_type','',1,NULL);
+INSERT INTO ansible_arguments VALUES('percona-postgresql','wal','%','','extra_replication_type','',1,NULL);
+INSERT INTO ansible_arguments VALUES('postgresql','logical-db','%','','extra_pg_logical_db','',1,NULL);
+INSERT INTO ansible_arguments VALUES('percona-postgresql','logical-db','%','','extra_pg_logical_db','',1,NULL);
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','cluster','%','','extra_cluster_name','cluster1',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','version','%','VERSION','extra_psmdb_version','8.0',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','opts-file','%','','extra_db_opts_file','mongo/enable_wt.conf',1,1);
@@ -4036,6 +4040,34 @@ INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','db-version','%',
 INSERT INTO k8s_arguments VALUES('k3d','ingress','%','','--ingress-port','443',1,NULL);
 INSERT INTO k8s_arguments VALUES('k3d','ingress-type','%','','--ingress','',1,NULL);
 INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','proxysql','%','','--proxysql','',1,NULL);
+CREATE TABLE version_sources(
+  keyword varchar(50),       -- keyword shown / accepted by `anydbver versions <keyword>`
+  display_name varchar(100), -- human-readable software name
+  source_table varchar(100), -- table holding the versions
+  program varchar(100),      -- filter value: general_version.program or k8s_operators_version.name; '' otherwise
+  strip_build int,           -- 1: group to upstream version (strip after first '-'); 0: show full version string
+  orderno int,
+  constraint pk PRIMARY KEY(keyword)
+);
+INSERT INTO version_sources VALUES('pg','PostgreSQL','postgresql_version','',1,10);
+INSERT INTO version_sources VALUES('ppg','Percona Distribution for PostgreSQL','percona_postgresql_version','',1,20);
+INSERT INTO version_sources VALUES('ps','Percona Server for MySQL','percona_server_version','',1,30);
+INSERT INTO version_sources VALUES('mysql','MySQL Server','mysql_server_version','',1,40);
+INSERT INTO version_sources VALUES('mariadb','MariaDB','mariadb_version','',1,50);
+INSERT INTO version_sources VALUES('pxc','Percona XtraDB Cluster','percona_xtradb_cluster_version','',1,60);
+INSERT INTO version_sources VALUES('mydb','MyDB','mydb_version','',1,70);
+INSERT INTO version_sources VALUES('psmdb','Percona Server for MongoDB','percona_server_mongodb_version','',1,80);
+INSERT INTO version_sources VALUES('pxb','Percona XtraBackup','percona_xtrabackup_version','',1,90);
+INSERT INTO version_sources VALUES('pbm','Percona Backup for MongoDB','percona_backup_mongodb_version','',1,100);
+INSERT INTO version_sources VALUES('pmm','PMM Server','docker_hub','percona/pmm-server',1,105);
+INSERT INTO version_sources VALUES('pmm-client','PMM Client','general_version','pmm-client',0,110);
+INSERT INTO version_sources VALUES('proxysql','Percona ProxySQL','general_version','percona-proxysql',0,120);
+INSERT INTO version_sources VALUES('orchestrator','Percona Orchestrator','general_version','percona-orchestrator',0,130);
+INSERT INTO version_sources VALUES('sysbench','Sysbench','general_version','sysbench',0,140);
+INSERT INTO version_sources VALUES('k8s-pg','Percona Operator for PostgreSQL','k8s_operators_version','percona/percona-postgresql-operator',0,150);
+INSERT INTO version_sources VALUES('k8s-psmdb','Percona Operator for MongoDB','k8s_operators_version','percona/percona-server-mongodb-operator',0,160);
+INSERT INTO version_sources VALUES('k8s-ps','Percona Operator for MySQL (PS)','k8s_operators_version','percona/percona-server-mysql-operator',0,170);
+INSERT INTO version_sources VALUES('k8s-pxc','Percona Operator for XtraDB Cluster','k8s_operators_version','percona/percona-xtradb-cluster-operator',0,180);
 CREATE TABLE keyword_aliases(keyword varchar(50), alias varchar(50));
 INSERT INTO keyword_aliases VALUES('postgresql','postgres');
 INSERT INTO keyword_aliases VALUES('postgresql','pg');

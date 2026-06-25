@@ -951,6 +951,38 @@ func IsDeploymentVersion(arg string) bool {
 	return false
 }
 
+// versionLess reports whether dotted-numeric version a is older than b.
+// A leading 'v' and any '-'/'+' suffix are ignored; missing or non-numeric
+// components count as 0 (so "0.1.23" < "0.1.37" and "0.1.9" < "0.1.10").
+func versionLess(a, b string) bool {
+	norm := func(s string) []int {
+		s = strings.TrimPrefix(strings.TrimSpace(s), "v")
+		if i := strings.IndexAny(s, "-+"); i >= 0 {
+			s = s[:i]
+		}
+		parts := strings.Split(s, ".")
+		nums := make([]int, len(parts))
+		for i, p := range parts {
+			nums[i], _ = strconv.Atoi(strings.TrimSpace(p))
+		}
+		return nums
+	}
+	av, bv := norm(a), norm(b)
+	for i := 0; i < len(av) || i < len(bv); i++ {
+		var x, y int
+		if i < len(av) {
+			x = av[i]
+		}
+		if i < len(bv) {
+			y = bv[i]
+		}
+		if x != y {
+			return x < y
+		}
+	}
+	return false
+}
+
 func ReadDatabaseVersion(dbFile string) (string, error) {
 	db, err := sql.Open("sqlite", dbFile)
 	if err != nil {
@@ -2147,7 +2179,12 @@ func main() {
 			}
 
 			dbFile := anydbver_common.GetDatabasePath(logger)
-			if ver, _ := ReadDatabaseVersion(dbFile); ver != strings.TrimPrefix(Version, "v") {
+			binVer := strings.TrimPrefix(Version, "v")
+			// Only nag when the local version DB is genuinely older than this
+			// binary. Skip dev/unknown builds and unreadable/empty versions so
+			// we don't warn forever on every command (see versionLess).
+			if dbVer, err := ReadDatabaseVersion(dbFile); err == nil && dbVer != "" &&
+				binVer != "dev" && binVer != "unknown" && versionLess(dbVer, binVer) {
 				logger.Println("Version database update is available for", dbFile, ". Run anydbver update to see latest versions")
 			}
 		},
@@ -2331,6 +2368,32 @@ func main() {
 	}
 
 	rootCmd.AddCommand(execCmd)
+
+	versionsCmd := &cobra.Command{
+		Use:   "versions [software]",
+		Short: "List software versions anydbver can deploy",
+		Long: "List the versions anydbver can deploy.\n\n" +
+			"  anydbver versions            # overview of every deployable software\n" +
+			"  anydbver versions pg         # all PostgreSQL versions, grouped by major\n" +
+			"  anydbver versions pg --latest# newest version per major series\n" +
+			"  anydbver versions psmdb --os el9\n" +
+			"  anydbver versions ps --all   # raw package versions with os/arch\n" +
+			"  anydbver versions --json     # machine-readable",
+		Run: func(cmd *cobra.Command, args []string) {
+			osFilter, _ := cmd.Flags().GetString("os")
+			archFilter, _ := cmd.Flags().GetString("arch")
+			latest, _ := cmd.Flags().GetBool("latest")
+			all, _ := cmd.Flags().GetBool("all")
+			asJSON, _ := cmd.Flags().GetBool("json")
+			runVersions(logger, anydbver_common.GetDatabasePath(logger), args, osFilter, archFilter, latest, all, asJSON)
+		},
+	}
+	versionsCmd.Flags().StringP("os", "o", "", "Only versions available for this OS (e.g. el9, jammy)")
+	versionsCmd.Flags().StringP("arch", "a", "", "Only versions available for this arch (x86_64, aarch64)")
+	versionsCmd.Flags().Bool("latest", false, "Show only the newest version per major series")
+	versionsCmd.Flags().Bool("all", false, "Show raw package versions with os/arch availability")
+	versionsCmd.Flags().Bool("json", false, "Output as JSON")
+	rootCmd.AddCommand(versionsCmd)
 
 	shellCmd := &cobra.Command{
 		Use:   "shell",

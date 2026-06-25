@@ -50,6 +50,14 @@
           touch "/root/{{ db_opts_file | basename }}.applied"
         creates: "/root/{{ db_opts_file | basename }}.applied"
 
+    - name: Enable logical wal_level for logical replication
+      when: replication_type == 'logical' and (postgresql_version != '' or percona_postgresql_version != '')
+      shell:
+        cmd: >-
+          echo "wal_level = logical" >> "{{pg_conf_dir}}/postgresql.conf";
+          touch /root/wal_level_logical.applied
+        creates: /root/wal_level_logical.applied
+
     - name: Setup Kerberos for PG
       when: kerberos_client != '' and (postgresql_version != '' or percona_postgresql_version != '')
       command:
