@@ -21,7 +21,7 @@ anydbver update
 
 # Claude Code skill (optional)
 
-If you use [Claude Code](https://claude.com/claude-code), you can drop a project skill into your skills directory so Claude can drive `anydbver` via natural language ("spin up a 3-node PXC cluster", "reproduce this Mongo bug on PSMDB 8.0", "armar replica de Postgres"):
+If you use [Claude Code](https://claude.com/claude-code), you can drop a project skill into your skills directory so Claude can drive `anydbver` via natural language ("spin up a 3-node PXC cluster", "reproduce this Mongo bug on PSMDB 8.0"):
 
 ```
 mkdir -p ~/.claude/skills
