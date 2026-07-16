@@ -1757,6 +1757,133 @@ func deployEverest(logger *log.Logger, namespace string, nodes int, everestVersi
 	fmt.Println("")
 }
 
+// knownDeployKeywords returns the set of valid deploy keyword commands the CLI
+// understands: every product, alias and operator name from the version DB, plus
+// the handful of tokens that are interpreted directly in code and are not backed
+// by DB rows. Used to reject unknown keywords instead of silently dropping them.
+func knownDeployKeywords(logger *log.Logger) map[string]bool {
+	known := map[string]bool{
+		// Tokens handled directly by deployHosts / ParseDeploymentKeyword, not
+		// present as ansible_arguments / k8s_arguments / keyword_aliases rows.
+		"os":       true,
+		"provider": true,
+	}
+	db, err := sql.Open("sqlite", anydbver_common.GetDatabasePath(logger))
+	if err != nil {
+		logger.Printf("Warning: could not open version DB to validate keywords: %v", err)
+		return known
+	}
+	defer db.Close()
+	rows, err := db.Query(`select distinct keyword from (select keyword from keyword_aliases union select alias as keyword from keyword_aliases union select cmd from ansible_arguments union select cmd from k8s_arguments) a`)
+	if err != nil {
+		logger.Printf("Warning: could not query keywords for validation: %v", err)
+		return known
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err == nil {
+			known[k] = true
+		}
+	}
+	return known
+}
+
+// levenshtein returns the edit distance between a and b (used to suggest the
+// closest valid keyword for a typo'd one).
+func levenshtein(a, b string) int {
+	la, lb := len(a), len(b)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	prev := make([]int, lb+1)
+	curr := make([]int, lb+1)
+	for j := 0; j <= lb; j++ {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			del := prev[j] + 1
+			ins := curr[j-1] + 1
+			sub := prev[j-1] + cost
+			min := del
+			if ins < min {
+				min = ins
+			}
+			if sub < min {
+				min = sub
+			}
+			curr[j] = min
+		}
+		prev, curr = curr, prev
+	}
+	return prev[lb]
+}
+
+// closestKeyword returns the known keyword nearest to word (edit distance <= 3),
+// or "" if none is close enough.
+func closestKeyword(word string, known map[string]bool) string {
+	best := ""
+	bestDist := 4 // threshold: only suggest within 3 edits
+	for k := range known {
+		d := levenshtein(word, k)
+		if d < bestDist {
+			bestDist = d
+			best = k
+		}
+	}
+	return best
+}
+
+// validateDeployKeywords fails fast if any deploy argument uses a keyword the CLI
+// does not recognize. Without this an unknown token (e.g. a typo, or a made-up
+// keyword like "galera-master:node1") is silently dropped, producing a broken
+// deployment with no diagnostic.
+func validateDeployKeywords(logger *log.Logger, args []string) {
+	known := knownDeployKeywords(logger)
+	var unknown []string
+	for _, arg := range args {
+		// node separators (node0, node1, ...) are not keywords
+		if strings.HasPrefix(arg, "node") {
+			continue
+		}
+		if strings.TrimSpace(arg) == "" {
+			continue
+		}
+		// keyword is the token before ':' (product) and before any ',' options
+		cmd := strings.SplitN(strings.SplitN(arg, ":", 2)[0], ",", 2)[0]
+		if cmd == "" {
+			continue
+		}
+		if !known[cmd] {
+			unknown = append(unknown, arg)
+		}
+	}
+	if len(unknown) == 0 {
+		return
+	}
+	for _, arg := range unknown {
+		cmd := strings.SplitN(strings.SplitN(arg, ":", 2)[0], ",", 2)[0]
+		logger.Printf("Error: unknown deploy keyword %q (in %q) - it is not a known product, alias or option. It would be silently ignored, leaving a broken deployment.", cmd, arg)
+		if strings.Contains(cmd, "master") || strings.Contains(cmd, "galera") || strings.Contains(cmd, "replica") {
+			logger.Printf("  Hint: clustering is expressed with comma-separated options ON a product item, not as a separate token.")
+			logger.Printf("        e.g. cluster join: 'pxc:latest,master=node0,galera'  (not 'galera-master:node0')")
+		} else if sug := closestKeyword(cmd, known); sug != "" {
+			logger.Printf("  Did you mean %q?", sug)
+		}
+	}
+	logger.Printf("Run 'anydbver deploy help keywords' to list valid keywords.")
+	os.Exit(runtools.ANYDBVER_UNKNOWN_KEYWORD)
+}
+
 func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider string, namespace string, args []string, verbose bool, memory string, cpus string) {
 	privileged := ""
 	re_lastosver := regexp.MustCompile(`=[^=]+$`)
@@ -2341,6 +2468,11 @@ func main() {
 				helpDeployCommands(logger, provider, args)
 				os.Exit(0)
 			}
+
+			// Reject unknown keywords before touching anything - in particular
+			// before the implicit destroy below, so a typo can't wipe an
+			// existing environment.
+			validateDeployKeywords(logger, args)
 
 			if !keep {
 				deleteNamespace(logger, provider, namespace)

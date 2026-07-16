@@ -20,6 +20,7 @@ const (
 	ANYDBVER_ERROR_BACKEND_PROBLEM           = 3
 	ANYDBVER_ANSIBLE_PROBLEM                 = 4
 	ANYDBVER_DOCKER_IMAGE_MIXED_WITH_ANSIBLE = 5
+	ANYDBVER_UNKNOWN_KEYWORD                 = 6
 )
 
 func HandleDockerProblem(logger *log.Logger, err error) {
