@@ -1,6 +1,8 @@
 # Products and aliases
 
-> Verified on 2026-06-04 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
+> Verified on 2026-07-17 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
+>
+> To discover deployable versions, prefer **`anydbver versions [software]`** (added in v0.1.37): `anydbver versions` for an overview, `anydbver versions psmdb` for the full per-major list, plus `--latest`, `--os`, `--arch`, `--all`, `--json`.
 
 ## Databases
 
@@ -115,16 +117,16 @@ anydbver --version                 # binary version
 
 ## Default versions (snapshot, will rot)
 
-These were the latest defaults on 2026-05-07. They shift between releases as the version DB updates — **always pin** when reproducing a bug.
+These were the latest defaults on 2026-07-17. They shift between releases as the version DB updates — **always pin** when reproducing a bug.
 
 | Product | `latest` resolves to (approx.) |
 |---------|-------------------------------|
 | `ps`            | 8.4.x         |
 | `mysql`         | 8.4.x         |
-| `mariadb`       | 11.4.x        |
+| `mariadb`       | 11.8.x        |
 | `pxc`           | 8.4.x         |
 | `pg`            | 18.x          |
-| `ppg`           | 17.x          |
+| `ppg`           | 18.x          |
 | `psmdb`         | 8.0.x         |
 | `pmm`           | 3.x           |
 | `pmm-client`    | `3.x.y-7` (bare `3.x.y` won't resolve) |
