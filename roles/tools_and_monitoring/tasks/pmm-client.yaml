@@ -14,6 +14,11 @@
   shell:
     cmd: >-
       percona-release enable pmm3-client
+- name: enable pmm2-client repo
+  when: (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux') and pmm_client_version.startswith('2')
+  shell:
+    cmd: >-
+      percona-release enable pmm2-client
 - name: install PMM client rpm packages
   when: (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
   yum:
