@@ -148,10 +148,26 @@ def branch_name(ver):
     return 'v' + ver
 
 
+CNPG_OPERATOR = "cloudnative-pg-operator"
+
+# Operators whose GitHub repository is not github.com/percona/<operator_name>.
+# Maps operator name -> (github organization, repository name). The checkout is
+# always placed in a directory named after the operator, so everything
+# downstream (deploy/cr.yaml handling) stays the same for every operator.
+OPERATOR_REPOSITORY = {
+    CNPG_OPERATOR: ("cloudnative-pg", "cloudnative-pg"),
+}
+
+
+def operator_git_url(operator_name):
+    org, repo = OPERATOR_REPOSITORY.get(
+        operator_name, ("percona", operator_name))
+    return "https://github.com/{org}/{repo}.git".format(org=org, repo=repo)
+
+
 def prepare_operator_repository(data_path, operator_name, operator_version):
     data_path = Path(data_path)
-    git_url = "https://github.com/percona/{operator_name}.git".format(
-        operator_name=operator_name)
+    git_url = operator_git_url(operator_name)
     os.makedirs(data_path, exist_ok=True)
     os.chdir(data_path)
     if not (data_path / operator_name / '.git').is_dir():
@@ -162,10 +178,10 @@ def prepare_operator_repository(data_path, operator_name, operator_version):
 
         if '.' in operator_version:
             run_fatal(["git", "clone", "--depth", "1", "-b", branch_name(
-                operator_version), git_url], "Can't fetch operator repository")
+                operator_version), git_url, operator_name], "Can't fetch operator repository")
             os.chdir(data_path / operator_name)
         else:
-            run_fatal(["git", "clone", git_url],
+            run_fatal(["git", "clone", git_url, operator_name],
                       "Can't fetch operator repository")
             os.chdir(data_path / operator_name)
             run_fatal(["git", "checkout", branch_name(operator_version)],
@@ -185,6 +201,39 @@ def prepare_operator_repository(data_path, operator_name, operator_version):
                   "Can't reset operator repository")
         run_fatal(["git", "checkout", branch_name(operator_version)],
                   "Can't checkout operator repository")
+
+
+def cnpg_bundle_path(operator_version):
+    """Path (inside the checkout) of the CloudNativePG operator manifest.
+
+    CloudNativePG ships the equivalent of Percona's deploy/bundle.yaml as
+    releases/cnpg-<version>.yaml. When a branch rather than a tag is deployed
+    (e.g. 'main') the exact version is unknown, so pick the newest release file.
+    """
+    bundle = Path("releases") / "cnpg-{}.yaml".format(operator_version)
+    if bundle.is_file():
+        return str(bundle)
+    releases = sorted(Path("releases").glob("cnpg-*.yaml"))
+    if not releases:
+        raise Exception(
+            "No CloudNativePG operator manifest found in {}/releases".format(os.getcwd()))
+    return str(releases[-1])
+
+
+def stage_cnpg_cr():
+    """Put the CloudNativePG sample cluster where every operator keeps its CR.
+
+    CloudNativePG has no deploy/cr.yaml; its cluster examples live under
+    docs/src/samples/. Copying the basic sample to deploy/cr.yaml lets the rest
+    of the code (set_yaml, cluster deployment, --info-only) treat CloudNativePG
+    exactly like the Percona operators.
+    """
+    sample = Path("docs") / "src" / "samples" / "cluster-example.yaml"
+    if not sample.is_file():
+        raise Exception(
+            "CloudNativePG sample cluster not found: {}".format(sample.resolve()))
+    os.makedirs("deploy", exist_ok=True)
+    shutil.copyfile(str(sample), str(Path("deploy") / "cr.yaml"))
 
 
 def get_containers_list(ns, labels):
@@ -261,6 +310,9 @@ def run_pg_operator(ns, op, db_ver, cluster_name, op_ver, standby, backup_type, 
 
 
 def op_labels(op, op_ver):
+    if op == CNPG_OPERATOR:
+        return "app.kubernetes.io/name=cloudnative-pg"
+
     if (op in ("percona-postgresql-operator", "postgres-operator")
             and (StrictVersion(op_ver) > StrictVersion("2.1.99"))):
         return "app.kubernetes.io/name=pg-operator"
@@ -280,6 +332,8 @@ def op_labels(op, op_ver):
 
 
 def cluster_labels(op, op_ver, cluster_name):
+    if op == CNPG_OPERATOR:
+        return "cnpg.io/cluster={},cnpg.io/instanceRole=primary".format(cluster_name)
     if op == "percona-xtradb-cluster-operator":
         return "app.kubernetes.io/instance={},app.kubernetes.io/component=pxc".format(cluster_name)
     elif op == "percona-server-mysql-operator":
@@ -303,15 +357,39 @@ def file_contains(file, s):
     return False
 
 
-def run_percona_operator(ns, op, op_ver, cluster_name):
-    run_fatal(["kubectl", "apply", "--server-side=true", "--force-conflicts", "-n", ns, "-f", "./deploy/bundle.yaml"],
+def run_percona_operator(ns, op, op_ver, cluster_name, bundle="./deploy/bundle.yaml", operator_ns=None):
+    if operator_ns is None:
+        operator_ns = ns
+    run_fatal(["kubectl", "apply", "--server-side=true", "--force-conflicts", "-n", operator_ns, "-f", bundle],
               "Can't deploy operator", ignore_msg=r"is invalid: status.storedVersions\[[0-9]+\]: Invalid value")
-    if not k8s_wait_for_ready(ns, op_labels(op, op_ver)):
+    if not k8s_wait_for_ready(operator_ns, op_labels(op, op_ver)):
         raise Exception("Kubernetes operator is not starting")
     run_fatal(["kubectl", "apply", "-n", ns, "-f",
               "./deploy/cr.yaml"], "Can't deploy cluster")
     if not k8s_wait_for_ready(ns, cluster_labels(op, op_ver, cluster_name)):
         raise Exception("cluster is not starting")
+
+
+def run_cnpg_operator(ns, op_ver, cluster_name, instances):
+    # Same two applies as any Percona operator, with CloudNativePG's own file
+    # names. The operator itself always goes to cnpg-system (its manifest pins
+    # that namespace and the operator watches every namespace anyway), only the
+    # Cluster is created in the requested namespace.
+    run_percona_operator(ns, CNPG_OPERATOR, op_ver, cluster_name,
+                         bundle=cnpg_bundle_path(op_ver),
+                         operator_ns="cnpg-system")
+
+    # k8s_wait_for_ready above returns as soon as the primary is up, which for a
+    # 3 instance cluster is 1 of 3. Wait for every replica to join as well.
+    if not wait_for_success(
+            ["kubectl", "wait", "--timeout=5s",
+             "--for=jsonpath={.status.readyInstances}=" + str(instances),
+             "-n", ns, "cluster.postgresql.cnpg.io/" + cluster_name],
+            "CloudNativePG cluster is not reaching {} ready instances".format(
+                instances),
+            r"timed out waiting for the condition|no matching resources found",
+            timeout=COMMAND_TIMEOUT):
+        raise Exception("CloudNativePG cluster instances are not starting")
 
 
 def cert_manager_ver_compat(operator_name, operator_version, cert_manager):
@@ -373,6 +451,8 @@ def run_cert_manager_helm(helm_path, ver):
 
 
 def get_operator_ns(operator_name):
+    if operator_name == CNPG_OPERATOR:
+        return "cnpg"
     if operator_name == "percona-server-mongodb-operator":
         return "psmdb"
     if operator_name == "percona-postgresql-operator":
@@ -1254,7 +1334,9 @@ def setup_operator(args):
         (Path(args.data_path) / args.operator_name / "deploy" / "cr.yaml").resolve())
     prepare_operator_repository(
         data_path.resolve(), args.operator_name, args.operator_version)
-    if not args.smart_update and args.operator_name not in ("percona-server-mysql-operator") \
+    if args.operator_name == CNPG_OPERATOR:
+        stage_cnpg_cr()
+    if not args.smart_update and args.operator_name not in ("percona-server-mysql-operator", CNPG_OPERATOR) \
             and not file_contains(cr_yaml_path, '.percona.com/v2'):
         merge_cr_yaml(args.yq, cr_yaml_path, str(
             (Path(args.conf_path) / "cr-smart-update.yaml").resolve()))
@@ -1346,12 +1428,49 @@ def setup_operator(args):
             set_yaml(
                 '.spec.sharding.enabled = false', 'disable sharding')
 
-    enable_pmm(args)
+    if args.operator_name == CNPG_OPERATOR:
+        if args.cluster_name == "":
+            args.cluster_name = "cluster1"
+        run_fatal(["sed", "-i", "-re", r"s/: cluster-example\>/: {}/".format(
+            args.cluster_name), "./deploy/cr.yaml"], "fix cluster name in cr.yaml")
+        args.users_secret = args.cluster_name + "-superuser"
+        if args.db_replicas:
+            set_yaml('.spec.instances={}'.format(int(args.db_replicas)),
+                     "Change number of instances")
+        if args.db_version:
+            if args.db_version[0].isdigit():
+                args.db_version = "ghcr.io/cloudnative-pg/postgresql:" + args.db_version
+            set_yaml('.spec.imageName="{}"'.format(args.db_version),
+                     "Can't set PostgreSQL version")
+        if args.storage_size:
+            set_yaml('.spec.storage.size="{}"'.format(args.storage_size),
+                     "set storage size")
+        if args.memory:
+            set_yaml('.spec.resources.limits.memory="{mem}" | .spec.resources.requests.memory="{mem}"'.format(mem=args.memory),
+                     "set memory limit")
+        # Off by default upstream, but a test environment where you can't
+        # "psql -U postgres" is not much of a test environment.
+        set_yaml('.spec.enableSuperuserAccess=true', "enable superuser access")
 
-    if args.minio:
-        enable_minio(args)
+    if args.operator_name == CNPG_OPERATOR:
+        # PMM and MinIO wiring patches Percona specific CR fields, which do not
+        # exist in a CloudNativePG Cluster.
+        if args.pmm != "":
+            logger.warning(
+                "PMM integration is not supported for CloudNativePG, ignoring")
+        if args.minio:
+            logger.warning(
+                "MinIO backups are not supported for CloudNativePG yet, the MinIO server is deployed but not configured as a backup target")
+    else:
+        enable_pmm(args)
 
-    if args.operator_name == "percona-postgresql-operator":
+        if args.minio:
+            enable_minio(args)
+
+    if args.operator_name == CNPG_OPERATOR:
+        run_cnpg_operator(args.namespace, args.operator_version,
+                          args.cluster_name, args.db_replicas if args.db_replicas else 3)
+    elif args.operator_name == "percona-postgresql-operator":
         run_pg_operator(args.namespace, args.operator_name, args.db_version,
                         args.cluster_name, args.operator_version, args.standby,
                         args.backup_type, args.bucket, args.gcs_key, args.db_replicas, args.cluster_tls)
@@ -1405,6 +1524,14 @@ def populate_pg_db(ver, ns, cluster_name, sql_file):
     print(
         "kubectl -n {} get PerconaPGCluster cluster1".format(subprocess.list2cmdline([ns])))
     for container in get_containers_list(ns, "name=cluster1"):
+        if container != "":
+            s = "kubectl -n {} exec -i {} -- env PSQL_HISTORY=/tmp/.psql_history psql -U postgres < {}".format(
+                subprocess.list2cmdline([ns]), container, subprocess.list2cmdline([sql_file]))
+            run_fatal(["sh", "-c", s], "Can't apply sql file")
+
+
+def populate_cnpg_db(ns, cluster_name, sql_file):
+    for container in get_containers_list(ns, "cnpg.io/cluster={},cnpg.io/instanceRole=primary".format(cluster_name)):
         if container != "":
             s = "kubectl -n {} exec -i {} -- env PSQL_HISTORY=/tmp/.psql_history psql -U postgres < {}".format(
                 subprocess.list2cmdline([ns]), container, subprocess.list2cmdline([sql_file]))
@@ -1569,6 +1696,8 @@ def populate_db(args):
         run_fatal(["sh", "-c", s], "Can't download sql file from s3")
         args.sql_file = dest
 
+    if args.operator_name == CNPG_OPERATOR:
+        populate_cnpg_db(args.namespace, args.cluster_name, args.sql_file)
     if args.operator_name == "percona-server-mongodb-operator":
         populate_mongodb(args.namespace, args.js_file)
     if args.operator_name == "percona-postgresql-operator":
@@ -1579,7 +1708,24 @@ def populate_db(args):
                         args.helm, args.cluster_name)
 
 
+def info_cnpg_operator(ns, cluster_name):
+    print("kubectl -n {} get cluster {}".format(
+        subprocess.list2cmdline([ns]), subprocess.list2cmdline([cluster_name])))
+    print("Read-write service: {}-rw.{}.svc, read-only: {}-ro.{}.svc".format(
+        cluster_name, ns, cluster_name, ns))
+    print("Application user password: kubectl -n {} get secret {}-app -o 'go-template={{{{ .data.password | base64decode }}}}'".format(
+        subprocess.list2cmdline([ns]), cluster_name))
+    print("Superuser password:        kubectl -n {} get secret {}-superuser -o 'go-template={{{{ .data.password | base64decode }}}}'".format(
+        subprocess.list2cmdline([ns]), cluster_name))
+    for container in get_containers_list(ns, "cnpg.io/cluster={},cnpg.io/instanceRole=primary".format(cluster_name)):
+        if container != "":
+            print("kubectl -n {} exec -it {} -- env PSQL_HISTORY=/tmp/.psql_history psql -U postgres".format(
+                subprocess.list2cmdline([ns]), container))
+
+
 def operator_info(args):
+    if args.operator_name == CNPG_OPERATOR:
+        info_cnpg_operator(args.namespace, args.cluster_name)
     if args.operator_name == "percona-server-mongodb-operator":
         info_mongo_operator(args.namespace, args.cluster_name)
     if args.operator_name == "percona-postgresql-operator":
@@ -1746,6 +1892,8 @@ def main():
     parser.add_argument("--helm-values", dest="helm_values",
                         type=str, default="")
     parser.add_argument('--memory', dest="memory", type=str, nargs='?')
+    parser.add_argument('--storage-size', dest="storage_size",
+                        type=str, default="")
     parser.add_argument('--loki', dest="loki", action='store_true')
     parser.add_argument('--kube-fledged', dest="kube_fledged", default="")
     parser.add_argument('--proxysql', dest="proxysql", action='store_true')

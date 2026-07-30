@@ -276,6 +276,26 @@ anydbver deploy k8s-pg:2.7.0,db-version=16                    # pin PG major
 anydbver deploy k3d k8s-pg:2.7.0 k8s-pg:2.7.0,namespace=pgo1,standby   # primary + standby
 ```
 
+### CloudNativePG operator
+
+```sh
+anydbver deploy k3d k8s-cnpg:1.30.0                                  # 3 instances, default PG
+anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17         # single instance, PG 17
+anydbver deploy k3d k8s-cnpg:1.30.0,storage=5Gi,memory=1Gi           # size the instances
+anydbver deploy k3d k8s-cnpg:1.30.0 k8s-cnpg:1.30.0,cluster-name=db1,namespace=pg1
+```
+
+**Verify.** `kubectl get cluster -A; kubectl -n cnpg get pods`
+
+**Differs from the Percona operators:**
+- The operator always runs in `cnpg-system` and watches all namespaces — `namespace=`
+  places the *Cluster*, not the operator. Extra `k8s-cnpg` keywords reuse the same operator.
+- `replicas=N` is the **total** instance count (`replicas=1` → single node).
+- `db-version=17` → `ghcr.io/cloudnative-pg/postgresql:17`; a full image reference also works.
+- No cert-manager needed. PMM and MinIO backups are **not** wired up for CNPG.
+- Superuser access is on: `kubectl -n <ns> exec -it <cluster>-1 -- psql -U postgres`.
+  Endpoints `<cluster>-rw` / `-ro` / `-r`; passwords in `<cluster>-app` / `<cluster>-superuser`.
+
 ### PSMDB operator
 
 ```sh

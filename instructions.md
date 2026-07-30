@@ -230,6 +230,7 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `percona-xtradb-cluster-operator`| `k8s-pxc`           | PXC operator                         |
 | `percona-server-mongodb-operator`| `k8s-psmdb`, `k8s-mongo` | PSMDB operator                   |
 | `percona-postgresql-operator`    | `k8s-pg`            | PostgreSQL operator                  |
+| `cloudnative-pg-operator`        | `k8s-cnpg`, `cnpg`  | CloudNativePG operator               |
 | `k8s-pmm`                        |                     | PMM inside k8s                       |
 | `k8s-pmm-ha`                     | `pmm-ha`            | PMM HA (Tech Preview) on k8s         |
 
@@ -368,6 +369,8 @@ the ones you will use most often.
 | `shards=N`              | Operator shard count                               |
 | `cluster-name=db1`      | Logical cluster name created by the operator       |
 | `db-version=13`         | DB version the operator should provision           |
+| `storage=2Gi`           | PVC size for each instance (k8s-cnpg)              |
+| `memory=1Gi`            | Memory request/limit per instance                  |
 | `helm`                  | Install the operator via Helm                      |
 | `standby`               | Create a standby cluster (k8s-pg)                  |
 | `proxysql`              | Enable ProxySQL in the cluster (k8s-pxc)           |
@@ -654,6 +657,15 @@ anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local \
 # PG operator pinned to DB major version 16
 anydbver deploy k8s-pg:2.7.0,db-version=16
 
+# CloudNativePG operator 1.30 (3 instance cluster, PG 18)
+anydbver deploy k3d k8s-cnpg:1.30.0
+
+# CloudNativePG: single instance, PostgreSQL 17, bigger volume
+anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17,storage=5Gi
+
+# Two CloudNativePG clusters in separate namespaces (one shared operator)
+anydbver deploy k3d k8s-cnpg:1.30.0 k8s-cnpg:1.30.0,cluster-name=db1,namespace=pg1
+
 # PSMDB operator 1.20 with custom cluster domain
 anydbver deploy \
   k3d:v1.25.16-k3s4,cluster-domain=percona.local \
@@ -674,6 +686,23 @@ To drive kubectl/helm yourself against the created cluster:
 ```sh
 anydbver shell    # enters a container with kubectl + helm wired up
 ```
+
+Notes on **CloudNativePG** (`k8s-cnpg`), which differs slightly from the Percona
+operators:
+
+- The operator always lives in the `cnpg-system` namespace and watches every
+  namespace, so `namespace=` picks where the *Cluster* goes, not the operator.
+  Deploying several `k8s-cnpg` keywords reuses that single operator.
+- `replicas=N` is the total number of instances (1 primary + N-1 replicas), so
+  `replicas=1` gives a single node cluster.
+- `db-version=17` selects `ghcr.io/cloudnative-pg/postgresql:17`; pass a full
+  image reference to use your own build. Without it you get the operator's
+  default PostgreSQL version.
+- Superuser access is enabled, so `psql -U postgres` works inside the pods. The
+  passwords are in the `<cluster-name>-app` and `<cluster-name>-superuser`
+  secrets, and the endpoints are `<cluster-name>-rw` / `-ro` / `-r`.
+- No cert-manager is needed, and PMM / MinIO backup integration is not wired up
+  for CloudNativePG yet.
 
 ### PMM HA on Kubernetes (Tech Preview)
 

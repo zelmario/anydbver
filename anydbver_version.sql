@@ -2833,6 +2833,8 @@ INSERT INTO tests VALUES(46,'PMM3','anydbver deploy pmm:3.3.1,docker-image,port=
 INSERT INTO tests VALUES(47,'pg with pgbouncer','anydbver deploy pgbouncer:node1,node2,node3 node1 pg node2 pg:master=node1 node3 pg:master=node1');
 INSERT INTO tests VALUES(48,'patroni pgbackrest haproxy pgbouncer','anydbver deploy ppg:16 patroni:cluster=cluster1 pgbackrest node1 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest node2 ppg:16,master=node0 patroni:master=node0,cluster=cluster1 pgbackrest node3 haproxy-patroni:node0,node1,node2 node4 pgbouncer:node3');
 INSERT INTO tests VALUES(49,'pmm ha tech preview','anydbver deploy k3d k8s-pmm-ha:1.4.1,size=small');
+INSERT INTO tests VALUES(50,'cloudnative-pg operator','anydbver deploy k3d k8s-cnpg:1.30.0');
+INSERT INTO tests VALUES(51,'cloudnative-pg single instance pg17','anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17');
 CREATE TABLE test_cases(
   test_id int,
   cmd varchar(1000)
@@ -3162,6 +3164,29 @@ INSERT INTO k8s_operators_version VALUES('percona/percona-xtradb-cluster-operato
 INSERT INTO k8s_operators_version VALUES('percona/percona-xtradb-cluster-operator','0.3.0');
 INSERT INTO k8s_operators_version VALUES('percona/percona-xtradb-cluster-operator','0.2.0');
 INSERT INTO k8s_operators_version VALUES('percona/percona-xtradb-cluster-operator','0.1.0');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.30.0');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.29.2');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.29.1');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.29.0');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.28.4');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.28.3');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.28.2');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.28.1');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.28.0');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.27.4');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.27.3');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.27.2');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.27.1');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.27.0');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.26.3');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.26.2');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.26.1');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.26.0');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.4');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.3');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.2');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.1');
+INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.0');
 INSERT INTO k8s_operators_version VALUES('percona/percona-postgresql-operator','2.7.0');
 INSERT INTO k8s_operators_version VALUES('percona/percona-postgresql-operator','2.6.0');
 INSERT INTO k8s_operators_version VALUES('percona/percona-postgresql-operator','2.5.1');
@@ -4040,6 +4065,15 @@ INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','db-version','%',
 INSERT INTO k8s_arguments VALUES('k3d','ingress','%','','--ingress-port','443',1,NULL);
 INSERT INTO k8s_arguments VALUES('k3d','ingress-type','%','','--ingress','',1,NULL);
 INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','proxysql','%','','--proxysql','',1,NULL);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','','%','TYPE','--operator','cloudnative-pg-operator',1,1);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','version','%','VERSION','--version','1.30.0',1,1);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','cluster-name','%','CLUSTER_NAME','--cluster-name','cluster1',1,1);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','namespace','%','NAMESPACE','--namespace','cnpg',1,1);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','replicas','%','','--db-replicas','3',1,1);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','storage','%','','--storage-size','1Gi',1,1);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','db-version','%','DB_VERSION','--db-version','',1,NULL);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','memory','%','','--memory','',1,NULL);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','sql','%','URL','--sql','',1,NULL);
 CREATE TABLE version_sources(
   keyword varchar(50),       -- keyword shown / accepted by `anydbver versions <keyword>`
   display_name varchar(100), -- human-readable software name
@@ -4068,6 +4102,7 @@ INSERT INTO version_sources VALUES('k8s-pg','Percona Operator for PostgreSQL','k
 INSERT INTO version_sources VALUES('k8s-psmdb','Percona Operator for MongoDB','k8s_operators_version','percona/percona-server-mongodb-operator',0,160);
 INSERT INTO version_sources VALUES('k8s-ps','Percona Operator for MySQL (PS)','k8s_operators_version','percona/percona-server-mysql-operator',0,170);
 INSERT INTO version_sources VALUES('k8s-pxc','Percona Operator for XtraDB Cluster','k8s_operators_version','percona/percona-xtradb-cluster-operator',0,180);
+INSERT INTO version_sources VALUES('k8s-cnpg','CloudNativePG Operator','k8s_operators_version','cloudnative-pg/cloudnative-pg',0,190);
 CREATE TABLE keyword_aliases(keyword varchar(50), alias varchar(50));
 INSERT INTO keyword_aliases VALUES('postgresql','postgres');
 INSERT INTO keyword_aliases VALUES('postgresql','pg');
@@ -4087,6 +4122,8 @@ INSERT INTO keyword_aliases VALUES('percona-server-mysql-operator','k8s-ps');
 INSERT INTO keyword_aliases VALUES('percona-backup-mongodb','pbm');
 INSERT INTO keyword_aliases VALUES('nfs-server','nfs');
 INSERT INTO keyword_aliases VALUES('k8s-pmm-ha','pmm-ha');
+INSERT INTO keyword_aliases VALUES('cloudnative-pg-operator','k8s-cnpg');
+INSERT INTO keyword_aliases VALUES('cloudnative-pg-operator','cnpg');
 CREATE TABLE subcmd_aliases(keyword TEXT,alias TEXT);
 INSERT INTO subcmd_aliases VALUES('master','primary');
 CREATE TABLE help_examples(cmd varchar(100), deploy varchar(1000));
