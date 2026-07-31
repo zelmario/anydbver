@@ -32,6 +32,23 @@ func VersionFetch(program string, dbFile string) error {
 	return nil
 }
 
+// mariadb_version carries 13 columns, so the column list is spelled out here
+// rather than relying on positional VALUES.
+const mariadbInsertQuery = `REPLACE INTO mariadb_version(
+	version, os, arch, repo_url, repo_file, repo_enable_str,
+	systemd_service, cnf_file, packages, debug_packages,
+	rocksdb_packages, tests_packages, mysql_shell_packages)
+	VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`
+
+// mysqlCnfFile returns the config file the mysql/mariadb roles expect for an OS:
+// EL uses a drop-in under my.cnf.d, the Debian family uses my.cnf directly.
+func mysqlCnfFile(osver string) string {
+	if strings.HasPrefix(osver, "el") {
+		return "/etc/my.cnf.d/zz_mysqld.cnf"
+	}
+	return "/etc/mysql/my.cnf"
+}
+
 func VersionFetchFromDebianPackages(dbFile string, program string, pu programVersionSource) error {
 	db, err := sql.Open("sqlite", dbFile)
 	if err != nil {
@@ -62,11 +79,11 @@ func VersionFetchFromDebianPackages(dbFile string, program string, pu programVer
 					return fmt.Errorf("can't insert postgresql package via '%s' %w", query, err)
 				}
 			case "mariadb":
-				query := "REPLACE INTO mariadb_version VALUES(?,?,?,?,?,?,?,?,?)"
-				if _, err := db.Exec(query, version, pu.osver, pu.arch, "",
+				if _, err := db.Exec(mariadbInsertQuery, version, pu.osver, pu.arch, "",
 					pu.repo_file, pu.repo_str,
-					"mariadb", fmt.Sprintf("%s=%s", pkgName, version), ""); err != nil {
-					return fmt.Errorf("can't insert mariadb package via '%s' %w", query, err)
+					"mariadb", mysqlCnfFile(pu.osver), fmt.Sprintf("%s=%s", pkgName, version),
+					"", "", "", ""); err != nil {
+					return fmt.Errorf("can't insert mariadb package via '%s' %w", mariadbInsertQuery, err)
 				}
 			}
 		}
@@ -204,11 +221,11 @@ func VersionFetchFromRpmPackages(dbFile string, program string, pu programVersio
 				return fmt.Errorf("can't insert postgresql package via '%s' %w", query, err)
 			}
 		case "mariadb":
-			query := "REPLACE INTO mariadb_version VALUES(?,?,?,?,?,?,?,?,?)"
-			if _, err := db.Exec(query, baseVersion, pu.osver, pu.arch, repoURL,
+			if _, err := db.Exec(mariadbInsertQuery, baseVersion, pu.osver, pu.arch, repoURL,
 				pu.repo_file, pu.repo_str,
-				systemdService, packagesStr, ""); err != nil {
-				return fmt.Errorf("can't insert mariadb package via '%s' %w", query, err)
+				systemdService, mysqlCnfFile(pu.osver), packagesStr,
+				"", "", "", ""); err != nil {
+				return fmt.Errorf("can't insert mariadb package via '%s' %w", mariadbInsertQuery, err)
 			}
 		case "pmm-client":
 			// Save to general_version table for pmm-client
