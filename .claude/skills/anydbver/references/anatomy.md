@@ -1,6 +1,6 @@
 # Command anatomy — full reference
 
-> Verified against `anydbver` v0.1.33 / `instructions.md` on 2026-05-07. The CLI's own `anydbver deploy help <keyword>` is canonical when in doubt.
+> Verified against `anydbver` v0.1.38 / `instructions.md` on 2026-07-31. The CLI's own `anydbver deploy help <keyword>` is canonical when in doubt.
 
 ## The shape
 
@@ -72,7 +72,7 @@ anydbver --namespace=PS-9999 --keep deploy node2 ps:8.4.5,master=node1
 
 These shape the deployment but aren't installed on a node:
 
-- `os:<name>` — base OS for the **next** node block. Common values: `el7`, `el8`, `el9`, `el10`, `jammy`, `focal`, `bookworm`. Position matters — `os:el8` *before* a product applies to that node.
+- `os:<name>` — base OS for the **next** node block. Common values: `el7`, `el8`, `el9`, `el10`, `jammy`, `focal`, `noble`, `bookworm`, `sles15`. Position matters — `os:el8` *before* a product applies to that node. `sles15` is bare-OS only — see [`products.md`](products.md).
 - `install <product>` — install steps only, do not start/configure. Used together with `cache:` to bake a reusable image. See [`docker-image-and-cache.md`](docker-image-and-cache.md).
 - `cache:<name>` — bake (first deploy) or reuse (subsequent) a pre-built container image keyed by `<name>`.
 

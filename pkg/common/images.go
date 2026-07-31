@@ -34,6 +34,12 @@ func GetDockerImageName(osver string, user string) string {
 		"ubuntu24.04":  IMAGE_PUBLISHER + "/ubuntu:noble-sshd-systemd-" + RELEASE_VERSION + platform_tag,
 		"bookworm":     IMAGE_PUBLISHER + "/debian:bookworm-sshd-systemd-" + RELEASE_VERSION + platform_tag,
 		"debian-12":    IMAGE_PUBLISHER + "/debian:bookworm-sshd-systemd-" + RELEASE_VERSION + platform_tag,
+		"sles":         IMAGE_PUBLISHER + "/sles:15-sshd-systemd-" + RELEASE_VERSION + platform_tag,
+		"sles15":       IMAGE_PUBLISHER + "/sles:15-sshd-systemd-" + RELEASE_VERSION + platform_tag,
+		"sles-15":      IMAGE_PUBLISHER + "/sles:15-sshd-systemd-" + RELEASE_VERSION + platform_tag,
+		"sles15.7":     IMAGE_PUBLISHER + "/sles:15-sshd-systemd-" + RELEASE_VERSION + platform_tag,
+		"suse":         IMAGE_PUBLISHER + "/sles:15-sshd-systemd-" + RELEASE_VERSION + platform_tag,
+		"suse15":       IMAGE_PUBLISHER + "/sles:15-sshd-systemd-" + RELEASE_VERSION + platform_tag,
 		"ansible":      IMAGE_PUBLISHER + "/rockylinux:8-anydbver-ansible-" + ANSIBLE_VERSION + platform_tag,
 	}
 
@@ -57,6 +63,12 @@ func GetDockerImageName(osver string, user string) string {
 			"ubuntu24.04":  "ubuntu:noble-sshd-systemd-" + user,
 			"bookworm":     "debian:bookworm-sshd-systemd-" + user,
 			"debian-12":    "debian:bookworm-sshd-systemd-" + user,
+			"sles":         "sles:15-sshd-systemd-" + user,
+			"sles15":       "sles:15-sshd-systemd-" + user,
+			"sles-15":      "sles:15-sshd-systemd-" + user,
+			"sles15.7":     "sles:15-sshd-systemd-" + user,
+			"suse":         "sles:15-sshd-systemd-" + user,
+			"suse15":       "sles:15-sshd-systemd-" + user,
 			"ansible":      "rockylinux:8-anydbver-ansible-" + user,
 		}
 	}

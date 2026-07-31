@@ -14,6 +14,8 @@
       'el8' if (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux') and ansible_distribution_version.startswith('8') else
       'el9' if (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux') and ansible_distribution_version.startswith('9') else
       'el10' if (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux') and ansible_distribution_version.startswith('10') else
+      'sles15' if (ansible_distribution == 'SLES' or ansible_distribution == 'SLES_SAP' or ansible_distribution == 'openSUSE Leap' or ansible_distribution == 'openSUSE') and ansible_distribution_version.startswith('15') else
+      'sles16' if (ansible_distribution == 'SLES' or ansible_distribution == 'SLES_SAP' or ansible_distribution == 'openSUSE Leap' or ansible_distribution == 'openSUSE') and ansible_distribution_version.startswith('16') else
       ansible_distribution_release
       }}
     percona_server_version: "{{ lookup('vars', 'extra_percona_server_version', default=lookup('env', 'PS', default='') ) }}"
@@ -207,7 +209,41 @@
       'postgresql' if postgresql_version != '' else
       ''
       }}
+    # Software that gets installed on the node itself from the version database.
+    # SUSE is currently supported as a bare OS only: no vendor publishes zypper
+    # repositories we can consume yet, so the version DB has no sles* rows and
+    # any of these would otherwise die deep inside a role with an unhelpful
+    # Jinja error. Keep in sync when a new node-level keyword is added.
+    node_software_requested: >-
+      {{ {
+      'percona-server': percona_server_version, 'pxc': percona_xtradb_cluster_version,
+      'mysql': mysql_version, 'mydb': mydb_version, 'mariadb': mariadb_version,
+      'postgresql': postgresql_version, 'percona-postgresql': percona_postgresql_version,
+      'psmdb': psmdb_version, 'mongodb': mongo_org_version,
+      'valkey': vites_version, 'pmm-client': pmm_client_version,
+      'pbm': pbm_version, 'percona-xtrabackup': percona_xtrabackup_version,
+      'patroni': patroni_version, 'repmgr': repmgr_version, 'pgbouncer': pgbouncer,
+      'pgpool': pgpool_version, 'odyssey': odyssey_version, 'wal-g': walg_version,
+      'pgbackrest': pgbackrest_version, 'barman': barman_version,
+      'haproxy-pg': haproxy_pg, 'haproxy-galera': haproxy_galera,
+      'haproxy-patroni': haproxy_patroni, 'orchestrator': orchestrator_version,
+      'percona-orchestrator': percona_orchestrator_version,
+      'proxysql': proxysql_version, 'percona-proxysql': percona_proxysql_version,
+      'mysql-router': mysql_router_version, 'ldap': ldap_server,
+      'kerberos': kerberos_server, 'vault': vault_version, 'minio': minio,
+      'nfs-server': nfs_server, 'nfs-client': nfs_client, 'docker': docker,
+      'sysbench': sysbench_version, 'percona-toolkit': percona_toolkit_version
+      } | dict2items | rejectattr('value', 'eq', '') | map(attribute='key') | list }}
   tasks:
+    - name: Fail early when software is requested on a SUSE node
+      when: dist.startswith('sles') and node_software_requested | length > 0
+      fail:
+        msg: >-
+          anydbver supports SUSE ({{ ansible_distribution }} {{ ansible_distribution_version }})
+          as a bare OS only: {{ node_software_requested | join(', ') }} cannot be installed there yet.
+          No zypper repositories are published for these products, so the version database has no
+          '{{ dist }}' rows. Deploy the node without software (for example
+          'anydbver deploy node0 os:sles15') and install by hand, or use an EL or Debian based OS.
     - name: Include package descriptions for each OS
       include_vars:
         file: common/vars/package_description.yaml

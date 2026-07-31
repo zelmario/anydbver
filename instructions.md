@@ -278,8 +278,23 @@ anydbver deploy os:el8 ppg:17     # Percona PG 17 on Rocky Linux 8
 ```
 
 Common OS keywords: `el7`, `el8`, `el9`, `el10` (RHEL/Rocky family),
-`jammy`, `focal` (Ubuntu), `bookworm` (Debian). The menu per-node is
+`jammy`, `focal`, `noble` (Ubuntu), `bookworm` (Debian),
+`sles15` (SUSE Linux Enterprise Server 15 SP7). The menu per-node is
 driven by `anydbver_version.sql`.
+
+**SUSE is a bare-OS platform only.** `os:sles15` (aliases `sles`, `suse`,
+`suse15`) gives a real SLES 15 SP7 node built from the freely
+redistributable SLE BCI base image — systemd, sshd and a working `zypper`,
+with no SUSE subscription required. No database or tool can be installed on
+it yet, because no vendor publishes zypper repositories anydbver can consume,
+so the version database has no `sles15` rows. Asking for software on a SUSE
+node fails immediately with an explanatory message rather than part way
+through a role. Use it to reproduce SLE-specific behaviour by hand:
+
+```sh
+anydbver deploy node0 os:sles15
+anydbver exec node0 -- zypper -n install <whatever you are testing>
+```
 
 ---
 

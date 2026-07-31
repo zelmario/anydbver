@@ -95,7 +95,9 @@ These shape the deploy command without being installed on a node:
 
 | Keyword            | What it does |
 |--------------------|--------------|
-| `os:<name>`        | Set the base OS for the next node block. Values: `el7`, `el8`, `el9`, `el10`, `jammy`, `focal`, `bookworm`, etc. |
+| `os:<name>`        | Set the base OS for the next node block. Values: `el7`, `el8`, `el9`, `el10`, `jammy`, `focal`, `noble`, `bookworm`, `sles15`, etc. |
+
+**SUSE (`os:sles15`, aliases `sles` / `suse` / `suse15`) is bare-OS only.** It gives a real SLES 15 SP7 node (SLE BCI base image, no subscription needed) with systemd, sshd and `zypper`, but **no product can be installed on it** — nobody publishes zypper repos anydbver can consume, so the version DB has no `sles15` rows. `anydbver deploy node0 os:sles15 pg:17` fails fast with an explanatory message. Offer it only for reproducing SLE-specific behaviour by hand (`anydbver exec node0 -- zypper -n install ...`); for anything needing a database, steer to an EL or Debian OS.
 | `install <product>`| Run only the install steps; don't start/configure. Used with `cache:` to bake a reusable image. |
 | `cache:<name>`     | Bake (first deploy) or reuse (subsequent) a pre-built container image. |
 | `default`          | Alias for `node0` in `master=default`, `ldap-master=default`, `master:default`. |
