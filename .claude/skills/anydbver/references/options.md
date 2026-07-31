@@ -1,6 +1,6 @@
 # Options reference (per family)
 
-> Verified on 2026-06-04. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
+> Verified on 2026-07-31. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
 
 ## MySQL / Percona Server / MariaDB / mydb
 
@@ -153,11 +153,20 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 | `standby`               | Create a standby cluster (k8s-pg).                 |
 | `proxysql`              | Enable ProxySQL in the cluster (k8s-pxc).          |
 | `certs=self-signed`     | Use self-signed TLS certificates (k8s-minio).      |
+| `storage=5Gi`           | PVC size per instance (k8s-cnpg, default `1Gi`).   |
+| `memory=1Gi`            | Memory request/limit per instance (k8s-cnpg).      |
+| `sql=path.sql`          | SQL file loaded into the new cluster (k8s-cnpg).   |
 
 **Gotchas.**
 - K3D RAM appetite: `cert-manager + operator + 3-replica CR ≈ 6–8 GB`. Underprovisioned hosts will see Pending pods and operator CrashLoopBackOff.
 - `cluster-domain=` interacts with ingress and TLS. If you set it, certs must match.
 - Operator `db-version=` only takes effect on first deploy; cross-major changes require destroy+redeploy.
+
+**CloudNativePG (`k8s-cnpg`, alias `cnpg`) differences.**
+- The operator always runs in `cnpg-system` and watches every namespace, so `namespace=` places the *Cluster*, not the operator. Several `k8s-cnpg` keywords share one operator.
+- `replicas=N` is the *total* instance count (1 primary + N-1 replicas), so `replicas=1` is a single node. On the Percona operators it counts replicas of the CR.
+- `db-version=17` selects `ghcr.io/cloudnative-pg/postgresql:17`; a full image reference also works.
+- PMM and MinIO wiring is skipped with a warning — those patch Percona CR fields a CloudNativePG `Cluster` does not have.
 
 ## PMM HA (k8s-pmm-ha, Tech Preview)
 

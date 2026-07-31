@@ -1,6 +1,6 @@
 # Products and aliases
 
-> Verified on 2026-07-17 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
+> Verified on 2026-07-31 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
 >
 > To discover deployable versions, prefer **`anydbver versions [software]`** (added in v0.1.37): `anydbver versions` for an overview, `anydbver versions psmdb` for the full per-major list, plus `--latest`, `--os`, `--arch`, `--all`, `--json`.
 
@@ -79,6 +79,7 @@
 | `percona-xtradb-cluster-operator`| `k8s-pxc`                | PXC operator                         |
 | `percona-server-mongodb-operator`| `k8s-psmdb`, `k8s-mongo` | PSMDB operator                       |
 | `percona-postgresql-operator`    | `k8s-pg`                 | PostgreSQL operator                  |
+| `cloudnative-pg-operator`        | `k8s-cnpg`, `cnpg`       | CloudNativePG operator               |
 | `k8s-pmm`                        |                          | PMM inside k8s                       |
 | `k8s-pmm-ha`                     | `pmm-ha`                 | PMM HA (Tech Preview) on k8s         |
 

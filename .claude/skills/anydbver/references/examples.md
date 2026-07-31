@@ -253,6 +253,15 @@ anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local \
 # PG operator pinned to PG major 16
 anydbver deploy k8s-pg:2.7.0,db-version=16
 
+# CloudNativePG operator 1.30 — 3 instances, operator default PG
+anydbver deploy k3d k8s-cnpg:1.30.0
+
+# CloudNativePG single instance on PG 17 with a bigger volume
+anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17,storage=5Gi
+
+# Two CloudNativePG clusters in separate namespaces (one shared operator in cnpg-system)
+anydbver deploy k3d k8s-cnpg:1.30.0 k8s-cnpg:1.30.0,cluster-name=db1,namespace=pg1
+
 # PSMDB operator 1.20 with custom cluster domain
 anydbver deploy \
   k3d:v1.25.16-k3s4,cluster-domain=percona.local \

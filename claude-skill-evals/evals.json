@@ -1,7 +1,7 @@
 {
   "skill": "anydbver",
-  "version": "0.1.34",
-  "verified_date": "2026-05-28",
+  "version": "0.1.38",
+  "verified_date": "2026-07-31",
   "evals": [
     {
       "id": "mysql-bug-repro-async-replication",
@@ -192,6 +192,22 @@
         "Verification includes `kubectl get pods -n pmm -l app.kubernetes.io/name=pmm-ha` (3 pmm-ha-N pods Ready)",
         "Mentions that only the Raft leader returns 200 on /v1/server/leaderHealthCheck (HAProxy routes to it)",
         "Does NOT suggest pulling pmm-ha:latest — pins to 1.4.1 (PMM 3.7.1)"
+      ]
+    },
+    {
+      "id": "k3d-cloudnativepg-single-instance",
+      "prompt": "Levantar CloudNativePG en local con k3d: un solo nodo Postgres 17, un poco mas de disco, para probar una extension.",
+      "expected_output": "A single command `anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17,storage=5Gi`, plus verification via kubectl and the note that the operator itself lands in cnpg-system, not the cluster namespace.",
+      "expectations": [
+        "Includes k3d (or k3d:latest) to bootstrap the nested cluster",
+        "Uses the k8s-cnpg keyword (alias cnpg / cloudnative-pg-operator) — NOT k8s-pg, which is the Percona operator",
+        "replicas=1 for a single instance — explains that replicas= is the TOTAL instance count for CNPG (1 primary + N-1 replicas), unlike the Percona operators",
+        "db-version=17 to pin PostgreSQL 17 (ghcr.io/cloudnative-pg/postgresql:17); without it you get the operator default",
+        "storage=5Gi for the per-instance PVC (default is 1Gi)",
+        "Does NOT add cert-manager as a hard requirement (CloudNativePG does not need it the way k8s-pg does)",
+        "Mentions the operator always runs in the cnpg-system namespace and watches all namespaces, so namespace= places the Cluster only",
+        "Verification uses kubectl (e.g. `kubectl get cluster -A` and `kubectl -n cnpg get pods`), reached via `anydbver shell`",
+        "Does NOT promise PMM or MinIO integration — those are skipped with a warning for CloudNativePG"
       ]
     }
   ]
