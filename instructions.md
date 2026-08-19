@@ -231,6 +231,7 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `percona-server-mongodb-operator`| `k8s-psmdb`, `k8s-mongo` | PSMDB operator                   |
 | `percona-postgresql-operator`    | `k8s-pg`            | PostgreSQL operator                  |
 | `cloudnative-pg-operator`        | `k8s-cnpg`, `cnpg`  | CloudNativePG operator               |
+| `crunchy-postgres-operator`      | `k8s-crunchy`, `crunchy` | Crunchy Postgres for Kubernetes (PGO) |
 | `k8s-pmm`                        |                     | PMM inside k8s                       |
 | `k8s-pmm-ha`                     | `pmm-ha`            | PMM HA (Tech Preview) on k8s         |
 
@@ -384,7 +385,7 @@ the ones you will use most often.
 | `shards=N`              | Operator shard count                               |
 | `cluster-name=db1`      | Logical cluster name created by the operator       |
 | `db-version=13`         | DB version the operator should provision           |
-| `storage=2Gi`           | PVC size for each instance (k8s-cnpg)              |
+| `storage=2Gi`           | PVC size per instance (k8s-cnpg, k8s-crunchy)      |
 | `memory=1Gi`            | Memory request/limit per instance                  |
 | `helm`                  | Install the operator via Helm                      |
 | `standby`               | Create a standby cluster (k8s-pg)                  |
@@ -681,6 +682,15 @@ anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17,storage=5Gi
 # Two CloudNativePG clusters in separate namespaces (one shared operator)
 anydbver deploy k3d k8s-cnpg:1.30.0 k8s-cnpg:1.30.0,cluster-name=db1,namespace=pg1
 
+# Crunchy Postgres for Kubernetes (PGO) 5.8.8, 3 instance cluster
+anydbver deploy k3d k8s-crunchy:5.8.8
+
+# Crunchy: single instance, PostgreSQL 17, bigger volumes
+anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17,storage=5Gi
+
+# Crunchy PGO 6.0 in its own namespace
+anydbver deploy k3d k8s-crunchy:6.0.2,cluster-name=db1,namespace=pg1
+
 # PSMDB operator 1.20 with custom cluster domain
 anydbver deploy \
   k3d:v1.25.16-k3s4,cluster-domain=percona.local \
@@ -718,6 +728,34 @@ operators:
   secrets, and the endpoints are `<cluster-name>-rw` / `-ro` / `-r`.
 - No cert-manager is needed, and PMM / MinIO backup integration is not wired up
   for CloudNativePG yet.
+
+Notes on **Crunchy Postgres for Kubernetes** (`k8s-crunchy`), the upstream PGO
+that the Percona PostgreSQL operator is forked from:
+
+- The operator always lives in the `postgres-operator` namespace and watches
+  every namespace, so `namespace=` picks where the *PostgresCluster* goes.
+  Deploying several `k8s-crunchy` keywords reuses that single operator.
+- `replicas=N` is the total number of instances, so `replicas=1` is a single
+  node cluster. The default is 3.
+- `db-version=17` sets `spec.postgresVersion`. The operator only carries images
+  for the majors it was built with (15 to 18 in 5.8 and 6.0), and asking for
+  another one fails early with the list of what is available. Pass a full image
+  reference instead to run your own build.
+- Images come from `registry.developers.crunchydata.com` and pull anonymously,
+  no account and no imagePullSecret. Their use is covered by the
+  [Crunchy Data Developer Program terms](https://www.crunchydata.com/developers/terms-of-use).
+- Crunchy tags the GitHub repository before it publishes the images, so the
+  newest tag is often not deployable yet. anydbver checks the registry first and
+  falls back to the image the checkout ships, or tells you to pick an older
+  version. `anydbver versions k8s-crunchy` lists the versions known to work.
+- Version 5.8 serves the `v1beta1` PostgresCluster API, 6.0 serves `v1`.
+- `psql -U postgres` works inside the `database` container of an instance pod.
+  The application user and its password are in the
+  `<cluster-name>-pguser-<cluster-name>` secret, and the endpoints are
+  `<cluster-name>-primary`, `<cluster-name>-replicas` and
+  `<cluster-name>-pgbouncer`.
+- No cert-manager is needed, and PMM / MinIO backup integration is not wired up
+  for Crunchy yet.
 
 ### PMM HA on Kubernetes (Tech Preview)
 

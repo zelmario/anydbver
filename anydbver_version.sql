@@ -2835,6 +2835,8 @@ INSERT INTO tests VALUES(48,'patroni pgbackrest haproxy pgbouncer','anydbver dep
 INSERT INTO tests VALUES(49,'pmm ha tech preview','anydbver deploy k3d k8s-pmm-ha:1.4.1,size=small');
 INSERT INTO tests VALUES(50,'cloudnative-pg operator','anydbver deploy k3d k8s-cnpg:1.30.0');
 INSERT INTO tests VALUES(51,'cloudnative-pg single instance pg17','anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17');
+INSERT INTO tests VALUES(52,'crunchy postgres operator','anydbver deploy k3d k8s-crunchy:5.8.8');
+INSERT INTO tests VALUES(53,'crunchy postgres single instance pg17','anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17');
 CREATE TABLE test_cases(
   test_id int,
   cmd varchar(1000)
@@ -3187,6 +3189,14 @@ INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.3
 INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.2');
 INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.1');
 INSERT INTO k8s_operators_version VALUES('cloudnative-pg/cloudnative-pg','1.25.0');
+INSERT INTO k8s_operators_version VALUES('CrunchyData/postgres-operator','6.0.2');
+INSERT INTO k8s_operators_version VALUES('CrunchyData/postgres-operator','6.0.1');
+INSERT INTO k8s_operators_version VALUES('CrunchyData/postgres-operator','6.0.0');
+INSERT INTO k8s_operators_version VALUES('CrunchyData/postgres-operator','5.8.8');
+INSERT INTO k8s_operators_version VALUES('CrunchyData/postgres-operator','5.8.7');
+INSERT INTO k8s_operators_version VALUES('CrunchyData/postgres-operator','5.8.6');
+INSERT INTO k8s_operators_version VALUES('CrunchyData/postgres-operator','5.8.5');
+INSERT INTO k8s_operators_version VALUES('CrunchyData/postgres-operator','5.7.9');
 INSERT INTO k8s_operators_version VALUES('percona/percona-postgresql-operator','2.7.0');
 INSERT INTO k8s_operators_version VALUES('percona/percona-postgresql-operator','2.6.0');
 INSERT INTO k8s_operators_version VALUES('percona/percona-postgresql-operator','2.5.1');
@@ -4074,6 +4084,15 @@ INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','storage','%','','--s
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','db-version','%','DB_VERSION','--db-version','',1,NULL);
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','memory','%','','--memory','',1,NULL);
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','sql','%','URL','--sql','',1,NULL);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','','%','TYPE','--operator','crunchy-postgres-operator',1,1);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','version','%','VERSION','--version','5.8.8',1,1);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','cluster-name','%','CLUSTER_NAME','--cluster-name','cluster1',1,1);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','namespace','%','NAMESPACE','--namespace','crunchy',1,1);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','replicas','%','','--db-replicas','3',1,1);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','storage','%','','--storage-size','1Gi',1,1);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','db-version','%','DB_VERSION','--db-version','',1,NULL);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','memory','%','','--memory','',1,NULL);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','sql','%','URL','--sql','',1,NULL);
 CREATE TABLE version_sources(
   keyword varchar(50),       -- keyword shown / accepted by `anydbver versions <keyword>`
   display_name varchar(100), -- human-readable software name
@@ -4103,6 +4122,7 @@ INSERT INTO version_sources VALUES('k8s-psmdb','Percona Operator for MongoDB','k
 INSERT INTO version_sources VALUES('k8s-ps','Percona Operator for MySQL (PS)','k8s_operators_version','percona/percona-server-mysql-operator',0,170);
 INSERT INTO version_sources VALUES('k8s-pxc','Percona Operator for XtraDB Cluster','k8s_operators_version','percona/percona-xtradb-cluster-operator',0,180);
 INSERT INTO version_sources VALUES('k8s-cnpg','CloudNativePG Operator','k8s_operators_version','cloudnative-pg/cloudnative-pg',0,190);
+INSERT INTO version_sources VALUES('k8s-crunchy','Crunchy Postgres for Kubernetes (PGO)','k8s_operators_version','CrunchyData/postgres-operator',0,195);
 CREATE TABLE keyword_aliases(keyword varchar(50), alias varchar(50));
 INSERT INTO keyword_aliases VALUES('postgresql','postgres');
 INSERT INTO keyword_aliases VALUES('postgresql','pg');
@@ -4124,6 +4144,8 @@ INSERT INTO keyword_aliases VALUES('nfs-server','nfs');
 INSERT INTO keyword_aliases VALUES('k8s-pmm-ha','pmm-ha');
 INSERT INTO keyword_aliases VALUES('cloudnative-pg-operator','k8s-cnpg');
 INSERT INTO keyword_aliases VALUES('cloudnative-pg-operator','cnpg');
+INSERT INTO keyword_aliases VALUES('crunchy-postgres-operator','k8s-crunchy');
+INSERT INTO keyword_aliases VALUES('crunchy-postgres-operator','crunchy');
 CREATE TABLE subcmd_aliases(keyword TEXT,alias TEXT);
 INSERT INTO subcmd_aliases VALUES('master','primary');
 CREATE TABLE help_examples(cmd varchar(100), deploy varchar(1000));

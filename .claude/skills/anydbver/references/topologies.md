@@ -296,6 +296,31 @@ anydbver deploy k3d k8s-cnpg:1.30.0 k8s-cnpg:1.30.0,cluster-name=db1,namespace=p
 - Superuser access is on: `kubectl -n <ns> exec -it <cluster>-1 -- psql -U postgres`.
   Endpoints `<cluster>-rw` / `-ro` / `-r`; passwords in `<cluster>-app` / `<cluster>-superuser`.
 
+### Crunchy Postgres for Kubernetes (PGO)
+
+```sh
+anydbver deploy k3d k8s-crunchy:5.8.8                                # 3 instances, PG 18
+anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17       # single instance, PG 17
+anydbver deploy k3d k8s-crunchy:5.8.8,storage=5Gi,memory=1Gi         # size the instances
+anydbver deploy k3d k8s-crunchy:6.0.2,cluster-name=db1,namespace=pg1
+```
+
+**Verify.** `kubectl get postgrescluster -A; kubectl -n crunchy get pods`
+
+**Differs from the Percona operators:**
+- Upstream PGO, the operator Percona's PG operator v2 forked from. Default `5.8.8`,
+  any published version deploys (`anydbver versions k8s-crunchy`).
+- The operator always runs in `postgres-operator` and watches all namespaces — `namespace=`
+  places the *PostgresCluster*. Extra `k8s-crunchy` keywords reuse the same operator.
+- `replicas=N` is the **total** instance count, default 3.
+- `db-version=17` sets `spec.postgresVersion`, majors 15 to 18 on 5.8 / 6.0.
+- The Patroni leader carries `postgres-operator.crunchydata.com/role=master`, not `primary`.
+- Images pull anonymously from `registry.developers.crunchydata.com`. New git tags often
+  have no image yet, anydbver checks before deploying.
+- No cert-manager needed. PMM and MinIO backups are **not** wired up for Crunchy.
+- `kubectl -n <ns> exec -it <pod> -c database -- psql -U postgres`. Endpoints
+  `<cluster>-primary` / `-replicas` / `-pgbouncer`; user in `<cluster>-pguser-<cluster>`.
+
 ### PSMDB operator
 
 ```sh

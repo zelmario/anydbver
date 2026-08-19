@@ -262,6 +262,15 @@ anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17,storage=5Gi
 # Two CloudNativePG clusters in separate namespaces (one shared operator in cnpg-system)
 anydbver deploy k3d k8s-cnpg:1.30.0 k8s-cnpg:1.30.0,cluster-name=db1,namespace=pg1
 
+# Crunchy Postgres for Kubernetes (upstream PGO) — 3 instances, PG 18
+anydbver deploy k3d k8s-crunchy:5.8.8
+
+# Crunchy single instance on PG 17 with bigger volumes
+anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17,storage=5Gi
+
+# Crunchy PGO 6.0 (v1 PostgresCluster API) in its own namespace
+anydbver deploy k3d k8s-crunchy:6.0.2,cluster-name=db1,namespace=pg1
+
 # PSMDB operator 1.20 with custom cluster domain
 anydbver deploy \
   k3d:v1.25.16-k3s4,cluster-domain=percona.local \

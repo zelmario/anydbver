@@ -12,6 +12,8 @@ import argparse
 import base64
 import urllib
 import urllib.parse
+import urllib.request
+import urllib.error
 import json
 import secrets
 
@@ -149,6 +151,14 @@ def branch_name(ver):
 
 
 CNPG_OPERATOR = "cloudnative-pg-operator"
+CRUNCHY_OPERATOR = "crunchy-postgres-operator"
+
+# Crunchy Postgres for Kubernetes (PGO) always installs the operator in this
+# namespace: its kustomize install hardcodes it and the operator watches every
+# namespace anyway, so only the PostgresCluster goes to the requested one.
+CRUNCHY_OPERATOR_NS = "postgres-operator"
+CRUNCHY_REGISTRY_HOST = "registry.developers.crunchydata.com"
+CRUNCHY_REGISTRY_AUTH = "https://registry-auth.developers.crunchydata.com/auth"
 
 # Operators whose GitHub repository is not github.com/percona/<operator_name>.
 # Maps operator name -> (github organization, repository name). The checkout is
@@ -156,6 +166,7 @@ CNPG_OPERATOR = "cloudnative-pg-operator"
 # downstream (deploy/cr.yaml handling) stays the same for every operator.
 OPERATOR_REPOSITORY = {
     CNPG_OPERATOR: ("cloudnative-pg", "cloudnative-pg"),
+    CRUNCHY_OPERATOR: ("CrunchyData", "postgres-operator"),
 }
 
 
@@ -232,6 +243,145 @@ def stage_cnpg_cr():
     if not sample.is_file():
         raise Exception(
             "CloudNativePG sample cluster not found: {}".format(sample.resolve()))
+    os.makedirs("deploy", exist_ok=True)
+    shutil.copyfile(str(sample), str(Path("deploy") / "cr.yaml"))
+
+
+def crunchy_image_published(image_repository, tag):
+    """True if registry.developers.crunchydata.com carries <repository>:<tag>.
+
+    The Crunchy registry hands an anonymous pull token to anybody, so no
+    credentials are needed. Git tags are cut before the images are published,
+    which means a brand new PGO tag deploys an image that does not exist yet.
+    Checking beats an ImagePullBackOff nobody can read. Any problem reaching
+    the registry answers True: a broken check must not block a deployment.
+    """
+    auth_url = "{}?service=docker-registry&scope=repository:crunchydata/{}:pull".format(
+        CRUNCHY_REGISTRY_AUTH, image_repository)
+    manifest_url = "https://{}/v2/crunchydata/{}/manifests/{}".format(
+        CRUNCHY_REGISTRY_HOST, image_repository, tag)
+    # The registry sits behind Cloudflare, which answers 403 to the default
+    # Python-urllib user agent.
+    user_agent = "anydbver/registry-check"
+    try:
+        auth_req = urllib.request.Request(auth_url)
+        auth_req.add_header("User-Agent", user_agent)
+        with urllib.request.urlopen(auth_req, timeout=30) as resp:
+            token = json.loads(resp.read().decode("utf-8"))["token"]
+        req = urllib.request.Request(manifest_url, method="HEAD")
+        req.add_header("User-Agent", user_agent)
+        req.add_header("Authorization", "Bearer " + token)
+        req.add_header("Accept", ",".join([
+            "application/vnd.oci.image.index.v1+json",
+            "application/vnd.docker.distribution.manifest.list.v2+json",
+            "application/vnd.docker.distribution.manifest.v2+json"]))
+        with urllib.request.urlopen(req, timeout=30):
+            return True
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 404):
+            return False
+        logger.warning("Can't check {}:{} in the Crunchy registry: {}".format(
+            image_repository, tag, e))
+        return True
+    except Exception as e:
+        logger.warning("Can't check {}:{} in the Crunchy registry: {}".format(
+            image_repository, tag, e))
+        return True
+
+
+def stage_crunchy_bundle(operator_version):
+    """Render Crunchy's kustomize install into the usual deploy/bundle.yaml.
+
+    PGO ships no single bundle.yaml, it ships config/default, a kustomize
+    overlay holding the CRDs, the RBAC and the operator Deployment. kubectl has
+    kustomize built in, so rendering it gives exactly the file every other
+    operator already has. The Namespace is a separate target (config/namespace)
+    and is created by run_crunchy_operator.
+
+    The rendered image tag is not trustworthy: v5.8.8 pins ubi9-5.8.6-0. Keep
+    the checkout's distribution prefix (ubi8 for 5.7, ubi9 from 5.8 on) and put
+    the requested version in it.
+    """
+    kustomize_dir = Path("config") / "default"
+    if not (kustomize_dir / "kustomization.yaml").is_file():
+        raise Exception(
+            "Crunchy operator kustomize install not found: {}".format(
+                kustomize_dir.resolve()))
+    os.makedirs("deploy", exist_ok=True)
+    bundle = str(Path("deploy") / "bundle.yaml")
+    run_fatal(["sh", "-c", "kubectl kustomize {} > {}".format(
+        subprocess.list2cmdline([str(kustomize_dir)]),
+        subprocess.list2cmdline([bundle]))],
+        "Can't render the Crunchy operator install")
+
+    with open(bundle) as f:
+        manifest = f.read()
+    image_re = re.compile(
+        r"(image:\s*\S*/postgres-operator:)([a-z0-9]+)-[0-9][0-9.]*-([0-9]+)")
+    found = image_re.search(manifest)
+    if not found:
+        raise Exception(
+            "No operator image found in the rendered Crunchy install {}".format(bundle))
+    shipped_tag = found.group(0).split(":")[-1]
+
+    tag = shipped_tag
+    numeric_version = re.match(r"^[0-9]+\.[0-9]+\.[0-9]+$", operator_version) is not None
+    if numeric_version:
+        tag = "{}-{}-{}".format(found.group(2), operator_version, found.group(3))
+    if not crunchy_image_published("postgres-operator", tag):
+        fallback = tag != shipped_tag and crunchy_image_published(
+            "postgres-operator", shipped_tag)
+        if fallback:
+            logger.warning(
+                "Crunchy has not published postgres-operator:{} yet, "
+                "deploying {} shipped by the {} checkout instead".format(
+                    tag, shipped_tag, operator_version))
+            tag = shipped_tag
+        elif numeric_version:
+            raise Exception(
+                "Crunchy has published no operator image for {}: {} does not exist in {}. "
+                "Crunchy tags the repository before it pushes the images, "
+                "deploy an older version, `anydbver versions k8s-crunchy` lists them".format(
+                    operator_version, tag, CRUNCHY_REGISTRY_HOST))
+        else:
+            logger.warning(
+                "{}/crunchydata/postgres-operator:{} is not published, "
+                "the operator pod will not start unless the image is already "
+                "on the nodes".format(CRUNCHY_REGISTRY_HOST, tag))
+
+    manifest = image_re.sub(r"\g<1>" + tag, manifest)
+    with open(bundle, "w") as f:
+        f.write(manifest)
+    logger.info("Crunchy operator image: {}/crunchydata/postgres-operator:{}".format(
+        CRUNCHY_REGISTRY_HOST, tag))
+    return bundle
+
+
+def crunchy_pg_majors(bundle="./deploy/bundle.yaml"):
+    """PostgreSQL major versions the operator has an image for.
+
+    PGO resolves spec.postgresVersion through its own RELATED_IMAGE_POSTGRES_<n>
+    environment, so asking for a major it was not built with leaves the cluster
+    stuck with no useful error.
+    """
+    with open(bundle) as f:
+        return sorted(int(v) for v in set(
+            re.findall(r"name: RELATED_IMAGE_POSTGRES_([0-9]+)$", f.read(), re.M)))
+
+
+def stage_crunchy_cr():
+    """Put Crunchy's PostgresCluster example where every operator keeps its CR.
+
+    PGO has no deploy/cr.yaml. Its example lives in examples/postgrescluster and
+    is always written against the API version that release serves (v1beta1 up to
+    5.8, v1 from 6.0), which the separate postgres-operator-examples repository
+    is not. Copying it to deploy/cr.yaml lets set_yaml, --info-only and
+    populate_db treat Crunchy exactly like the Percona operators.
+    """
+    sample = Path("examples") / "postgrescluster" / "postgrescluster.yaml"
+    if not sample.is_file():
+        raise Exception(
+            "Crunchy PostgresCluster example not found: {}".format(sample.resolve()))
     os.makedirs("deploy", exist_ok=True)
     shutil.copyfile(str(sample), str(Path("deploy") / "cr.yaml"))
 
@@ -313,6 +463,9 @@ def op_labels(op, op_ver):
     if op == CNPG_OPERATOR:
         return "app.kubernetes.io/name=cloudnative-pg"
 
+    if op == CRUNCHY_OPERATOR:
+        return "postgres-operator.crunchydata.com/control-plane=postgres-operator"
+
     if (op in ("percona-postgresql-operator", "postgres-operator")
             and (StrictVersion(op_ver) > StrictVersion("2.1.99"))):
         return "app.kubernetes.io/name=pg-operator"
@@ -334,6 +487,11 @@ def op_labels(op, op_ver):
 def cluster_labels(op, op_ver, cluster_name):
     if op == CNPG_OPERATOR:
         return "cnpg.io/cluster={},cnpg.io/instanceRole=primary".format(cluster_name)
+    if op == CRUNCHY_OPERATOR:
+        # Upstream Crunchy keeps role=master on the Patroni leader on purpose
+        # ("To support transitioning to Patroni v4"), unlike the Percona fork
+        # which switched to role=primary in 2.6.0.
+        return "postgres-operator.crunchydata.com/cluster={},postgres-operator.crunchydata.com/role=master".format(cluster_name)
     if op == "percona-xtradb-cluster-operator":
         return "app.kubernetes.io/instance={},app.kubernetes.io/component=pxc".format(cluster_name)
     elif op == "percona-server-mysql-operator":
@@ -390,6 +548,29 @@ def run_cnpg_operator(ns, op_ver, cluster_name, instances):
             r"timed out waiting for the condition|no matching resources found",
             timeout=COMMAND_TIMEOUT):
         raise Exception("CloudNativePG cluster instances are not starting")
+
+
+def run_crunchy_operator(ns, op_ver, cluster_name, instances, bundle):
+    # The rendered install carries namespace: postgres-operator on every
+    # namespaced resource but no Namespace object, config/namespace is a
+    # separate kustomize target. Create it before applying.
+    run_fatal(["kubectl", "create", "namespace", CRUNCHY_OPERATOR_NS],
+              "Can't create a namespace for the Crunchy operator",
+              r"from server \(AlreadyExists\)")
+    run_percona_operator(ns, CRUNCHY_OPERATOR, op_ver, cluster_name,
+                         bundle=bundle, operator_ns=CRUNCHY_OPERATOR_NS)
+
+    # The label wait above returns as soon as the Patroni leader is up, which
+    # for a 3 instance cluster is 1 of 3. Wait for the replicas to join too.
+    if not wait_for_success(
+            ["kubectl", "wait", "--timeout=5s",
+             "--for=jsonpath={.status.instances[0].readyReplicas}=" + str(instances),
+             "-n", ns,
+             "postgrescluster.postgres-operator.crunchydata.com/" + cluster_name],
+            "Crunchy cluster is not reaching {} ready instances".format(instances),
+            r"timed out waiting for the condition|no matching resources found",
+            timeout=COMMAND_TIMEOUT):
+        raise Exception("Crunchy Postgres instances are not starting")
 
 
 def cert_manager_ver_compat(operator_name, operator_version, cert_manager):
@@ -453,6 +634,8 @@ def run_cert_manager_helm(helm_path, ver):
 def get_operator_ns(operator_name):
     if operator_name == CNPG_OPERATOR:
         return "cnpg"
+    if operator_name == CRUNCHY_OPERATOR:
+        return "crunchy"
     if operator_name == "percona-server-mongodb-operator":
         return "psmdb"
     if operator_name == "percona-postgresql-operator":
@@ -1336,7 +1519,10 @@ def setup_operator(args):
         data_path.resolve(), args.operator_name, args.operator_version)
     if args.operator_name == CNPG_OPERATOR:
         stage_cnpg_cr()
-    if not args.smart_update and args.operator_name not in ("percona-server-mysql-operator", CNPG_OPERATOR) \
+    if args.operator_name == CRUNCHY_OPERATOR:
+        stage_crunchy_cr()
+        stage_crunchy_bundle(args.operator_version)
+    if not args.smart_update and args.operator_name not in ("percona-server-mysql-operator", CNPG_OPERATOR, CRUNCHY_OPERATOR) \
             and not file_contains(cr_yaml_path, '.percona.com/v2'):
         merge_cr_yaml(args.yq, cr_yaml_path, str(
             (Path(args.conf_path) / "cr-smart-update.yaml").resolve()))
@@ -1452,6 +1638,39 @@ def setup_operator(args):
         # "psql -U postgres" is not much of a test environment.
         set_yaml('.spec.enableSuperuserAccess=true', "enable superuser access")
 
+    if args.operator_name == CRUNCHY_OPERATOR:
+        if args.cluster_name == "":
+            args.cluster_name = "cluster1"
+        run_fatal(["sed", "-i", "-re", r"s/: hippo\>/: {}/".format(
+            args.cluster_name), "./deploy/cr.yaml"], "fix cluster name in cr.yaml")
+        # PGO names the default user and its secret after the cluster.
+        args.users_secret = "{c}-pguser-{c}".format(c=args.cluster_name)
+        if args.db_replicas:
+            set_yaml('.spec.instances[0].replicas={}'.format(int(args.db_replicas)),
+                     "Change number of instances")
+        if args.db_version:
+            if args.db_version.isdigit():
+                majors = crunchy_pg_majors()
+                if int(args.db_version) not in majors:
+                    raise Exception(
+                        "Crunchy operator {} ships no PostgreSQL {} image, "
+                        "available major versions: {}".format(
+                            args.operator_version, args.db_version,
+                            ", ".join(str(m) for m in majors)))
+                set_yaml('.spec.postgresVersion={}'.format(int(args.db_version)),
+                         "Can't set PostgreSQL version")
+            else:
+                set_yaml('.spec.image="{}"'.format(args.db_version),
+                         "Can't set PostgreSQL image")
+        if args.storage_size:
+            set_yaml('(.spec.instances[0].dataVolumeClaimSpec.resources.requests.storage="{size}") | '
+                     '(.spec.backups.pgbackrest.repos[].volume.volumeClaimSpec.resources.requests.storage="{size}")'.format(
+                         size=args.storage_size),
+                     "set storage size")
+        if args.memory:
+            set_yaml('.spec.instances[0].resources.limits.memory="{mem}" | .spec.instances[0].resources.requests.memory="{mem}"'.format(mem=args.memory),
+                     "set memory limit")
+
     if args.operator_name == CNPG_OPERATOR:
         # PMM and MinIO wiring patches Percona specific CR fields, which do not
         # exist in a CloudNativePG Cluster.
@@ -1461,6 +1680,15 @@ def setup_operator(args):
         if args.minio:
             logger.warning(
                 "MinIO backups are not supported for CloudNativePG yet, the MinIO server is deployed but not configured as a backup target")
+    elif args.operator_name == CRUNCHY_OPERATOR:
+        # Same reason: enable_pmm and enable_minio patch Percona CR fields that
+        # a Crunchy PostgresCluster does not have.
+        if args.pmm != "":
+            logger.warning(
+                "PMM integration is not supported for Crunchy Postgres, ignoring")
+        if args.minio:
+            logger.warning(
+                "MinIO backups are not supported for Crunchy Postgres yet, the MinIO server is deployed but not configured as a backup target")
     else:
         enable_pmm(args)
 
@@ -1470,6 +1698,11 @@ def setup_operator(args):
     if args.operator_name == CNPG_OPERATOR:
         run_cnpg_operator(args.namespace, args.operator_version,
                           args.cluster_name, args.db_replicas if args.db_replicas else 3)
+    elif args.operator_name == CRUNCHY_OPERATOR:
+        run_crunchy_operator(args.namespace, args.operator_version,
+                             args.cluster_name,
+                             args.db_replicas if args.db_replicas else 1,
+                             "./deploy/bundle.yaml")
     elif args.operator_name == "percona-postgresql-operator":
         run_pg_operator(args.namespace, args.operator_name, args.db_version,
                         args.cluster_name, args.operator_version, args.standby,
@@ -1527,6 +1760,17 @@ def populate_pg_db(ver, ns, cluster_name, sql_file):
         if container != "":
             s = "kubectl -n {} exec -i {} -- env PSQL_HISTORY=/tmp/.psql_history psql -U postgres < {}".format(
                 subprocess.list2cmdline([ns]), container, subprocess.list2cmdline([sql_file]))
+            run_fatal(["sh", "-c", s], "Can't apply sql file")
+
+
+def populate_crunchy_db(ns, cluster_name, sql_file):
+    for container in get_containers_list(ns, cluster_labels(CRUNCHY_OPERATOR, "", cluster_name)):
+        if container != "":
+            # A Crunchy instance pod runs several containers, psql lives in
+            # "database".
+            s = "kubectl -n {} exec -i {} -c database -- env PSQL_HISTORY=/tmp/.psql_history psql -U postgres < {}".format(
+                subprocess.list2cmdline([ns]), container,
+                subprocess.list2cmdline([sql_file]))
             run_fatal(["sh", "-c", s], "Can't apply sql file")
 
 
@@ -1698,6 +1942,8 @@ def populate_db(args):
 
     if args.operator_name == CNPG_OPERATOR:
         populate_cnpg_db(args.namespace, args.cluster_name, args.sql_file)
+    if args.operator_name == CRUNCHY_OPERATOR:
+        populate_crunchy_db(args.namespace, args.cluster_name, args.sql_file)
     if args.operator_name == "percona-server-mongodb-operator":
         populate_mongodb(args.namespace, args.js_file)
     if args.operator_name == "percona-postgresql-operator":
@@ -1723,9 +1969,24 @@ def info_cnpg_operator(ns, cluster_name):
                 subprocess.list2cmdline([ns]), container))
 
 
+def info_crunchy_operator(ns, cluster_name):
+    print("kubectl -n {} get postgrescluster {}".format(
+        subprocess.list2cmdline([ns]), subprocess.list2cmdline([cluster_name])))
+    print("Primary service: {}-primary.{}.svc, replicas: {}-replicas.{}.svc, pgbouncer: {}-pgbouncer.{}.svc".format(
+        cluster_name, ns, cluster_name, ns, cluster_name, ns))
+    print("Application user and password: kubectl -n {} get secret {c}-pguser-{c} -o 'go-template={{{{ .data.user | base64decode }}}} {{{{ .data.password | base64decode }}}}'".format(
+        subprocess.list2cmdline([ns]), c=cluster_name))
+    for container in get_containers_list(ns, cluster_labels(CRUNCHY_OPERATOR, "", cluster_name)):
+        if container != "":
+            print("kubectl -n {} exec -it {} -c database -- env PSQL_HISTORY=/tmp/.psql_history psql -U postgres".format(
+                subprocess.list2cmdline([ns]), container))
+
+
 def operator_info(args):
     if args.operator_name == CNPG_OPERATOR:
         info_cnpg_operator(args.namespace, args.cluster_name)
+    if args.operator_name == CRUNCHY_OPERATOR:
+        info_crunchy_operator(args.namespace, args.cluster_name)
     if args.operator_name == "percona-server-mongodb-operator":
         info_mongo_operator(args.namespace, args.cluster_name)
     if args.operator_name == "percona-postgresql-operator":

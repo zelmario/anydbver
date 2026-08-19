@@ -153,9 +153,9 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 | `standby`               | Create a standby cluster (k8s-pg).                 |
 | `proxysql`              | Enable ProxySQL in the cluster (k8s-pxc).          |
 | `certs=self-signed`     | Use self-signed TLS certificates (k8s-minio).      |
-| `storage=5Gi`           | PVC size per instance (k8s-cnpg, default `1Gi`).   |
-| `memory=1Gi`            | Memory request/limit per instance (k8s-cnpg).      |
-| `sql=path.sql`          | SQL file loaded into the new cluster (k8s-cnpg).   |
+| `storage=5Gi`           | PVC size per instance (k8s-cnpg, k8s-crunchy, default `1Gi`). |
+| `memory=1Gi`            | Memory request/limit per instance (k8s-cnpg, k8s-crunchy). |
+| `sql=path.sql`          | SQL file loaded into the new cluster (k8s-cnpg, k8s-crunchy). |
 
 **Gotchas.**
 - K3D RAM appetite: `cert-manager + operator + 3-replica CR ≈ 6–8 GB`. Underprovisioned hosts will see Pending pods and operator CrashLoopBackOff.
@@ -167,6 +167,14 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 - `replicas=N` is the *total* instance count (1 primary + N-1 replicas), so `replicas=1` is a single node. On the Percona operators it counts replicas of the CR.
 - `db-version=17` selects `ghcr.io/cloudnative-pg/postgresql:17`; a full image reference also works.
 - PMM and MinIO wiring is skipped with a warning — those patch Percona CR fields a CloudNativePG `Cluster` does not have.
+
+**Crunchy Postgres for Kubernetes (`k8s-crunchy`, alias `crunchy`) differences.**
+- Upstream PGO, the operator the Percona PG operator v2 is forked from. Default version `5.8.8`, any tag works (`k8s-crunchy:6.0.2`).
+- The operator always runs in `postgres-operator` and watches every namespace, so `namespace=` places the *PostgresCluster*. Several `k8s-crunchy` keywords share one operator.
+- `replicas=N` is the *total* instance count, default 3.
+- `db-version=17` sets `spec.postgresVersion` and only accepts a major the operator ships an image for (15 to 18 on 5.8 / 6.0). A full image reference sets `spec.image` instead.
+- Images pull anonymously from `registry.developers.crunchydata.com`, no account needed. Crunchy tags GitHub before publishing images, so the newest tag may not deploy: anydbver checks the registry and falls back or fails with a clear message. `anydbver versions k8s-crunchy` lists known good ones.
+- PMM and MinIO wiring is skipped with a warning, same reason as CloudNativePG.
 
 ## PMM HA (k8s-pmm-ha, Tech Preview)
 

@@ -80,6 +80,7 @@
 | `percona-server-mongodb-operator`| `k8s-psmdb`, `k8s-mongo` | PSMDB operator                       |
 | `percona-postgresql-operator`    | `k8s-pg`                 | PostgreSQL operator                  |
 | `cloudnative-pg-operator`        | `k8s-cnpg`, `cnpg`       | CloudNativePG operator               |
+| `crunchy-postgres-operator`      | `k8s-crunchy`, `crunchy` | Crunchy Postgres for Kubernetes (PGO) |
 | `k8s-pmm`                        |                          | PMM inside k8s                       |
 | `k8s-pmm-ha`                     | `pmm-ha`                 | PMM HA (Tech Preview) on k8s         |
 

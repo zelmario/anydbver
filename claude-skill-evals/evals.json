@@ -209,6 +209,20 @@
         "Verification uses kubectl (e.g. `kubectl get cluster -A` and `kubectl -n cnpg get pods`), reached via `anydbver shell`",
         "Does NOT promise PMM or MinIO integration — those are skipped with a warning for CloudNativePG"
       ]
+    },
+    {
+      "id": "k3d-crunchy-postgres",
+      "prompt": "Necesito reproducir algo en Crunchy Postgres para Kubernetes, la version 5.8, un solo instance en PG 17. Se puede con anydbver?",
+      "expected_output": "A single command `anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17`, plus kubectl verification and the note that the operator lands in the postgres-operator namespace, not the cluster one.",
+      "expectations": [
+        "Includes k3d (or k3d:latest) to bootstrap the nested cluster",
+        "Uses the k8s-crunchy keyword (alias crunchy / crunchy-postgres-operator) — NOT k8s-pg, which is the Percona fork, and NOT k8s-cnpg",
+        "replicas=1 for a single instance — explains that replicas= is the TOTAL instance count, default 3",
+        "db-version=17 sets spec.postgresVersion, and only majors the operator ships an image for (15 to 18) are accepted",
+        "Says the operator always runs in the postgres-operator namespace and watches every namespace, so namespace= places the PostgresCluster",
+        "Verification with kubectl get postgrescluster -A / kubectl -n crunchy get pods, and psql inside the -c database container",
+        "Does NOT claim PMM or MinIO backup integration works with Crunchy"
+      ]
     }
   ]
 }
