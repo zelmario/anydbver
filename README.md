@@ -2,6 +2,13 @@
 Configuring MySQL, Percona MySQL/Postgresql/Mongo, MongoDB with ansible scripts.
 Running multi-node replication clusters in Docker and Kubernetes.
 
+## Documentation
+
+This README covers installation and the shape of the commands. For the full
+reference, see **[instructions.md](instructions.md)**: every keyword and alias,
+the options each one takes, the operator and Kubernetes flows, and worked
+examples for replication, backups, HA and monitoring topologies.
+
 
 # Installation
 1. Setup Docker, make sure that your user added to the docker group:
@@ -80,7 +87,15 @@ percona-proxysql                 Installs ProxySQL from Percona's packages
 percona-server                   Installs Percona Server for MySQL
 percona-server-mongodb           Installs Percona Server for MongoDB
 percona-xtradb-cluster           Installs Percona XtraDB Cluster (Percona Server patched to support Galera replication)
+barman                           Installs Barman, Postgresql backup and recovery manager
+haproxy-patroni                  Installs haproxy and configures it in front of a Patroni cluster
+kerberos                         Installs a Samba based Kerberos KDC for GSSAPI authentication
+minio                            Installs MinIO S3 server on a node
+mydb                             Installs MyDB, a MySQL-family variant (same options as mysql)
+nfs-client                       Mounts an NFS share from an nfs-server node
+nfs-server                       Installs an NFS server and exports a share to other nodes
 pgbackrest                       Installs pgbackrest
+pgbouncer                        Installs pgbouncer, Postgresql connection pooler
 pmm-client                       Installs Percona Monitoring and Management client
 postgresql                       Installs Postgresql from PGDG packages
 repmgr                           Installs repmgr, Postgresql replication management solution
@@ -90,6 +105,9 @@ cert-manager                     Installs cert-manager.io TLS certificates manag
 k3d                              Using a specified node as a multi-server Kubernetes installation (Kubernetes nodes as nested Docker containers)
 k8s-minio                        Installs MinIO S3 Server inside Kubernetes
 k8s-pmm                          Installs Percona Monitoring and Management inside Kubernetes
+k8s-pmm-ha                       Installs the PMM High Availability helm stack inside Kubernetes (Tech Preview)
+cloudnative-pg-operator          Installs the CloudNativePG operator and creates a postgresql cluster in Kubernetes
+crunchy-postgres-operator        Installs Crunchy Postgres for Kubernetes (upstream PGO) and creates a postgresql cluster
 percona-postgresql-operator      Installs Percona Postgresql Operator and creates a postgresql cluster in Kubernetes
 percona-server-mongodb-operator  Installs Percona Server for MongoDB Operator and creates a PSMDB cluster in Kubernetes
 percona-server-mysql-operator    Installs Percona Server for MySQL Operator (Group replication) and creates a MySQL cluster in Kubernetes
