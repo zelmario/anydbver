@@ -8,6 +8,42 @@ if uname -m | egrep -q 'aarch64|arm64'; then
   PLATFORM=linux/arm64
   PLATFORM_TAG="-arm64"
 fi
+
+# Two environment problems have silently broken three releases in a row. Neither
+# fails in a way that points at the cause, so check for them up front.
+# Set ANYDBVER_SKIP_PREFLIGHT=1 to bypass.
+preflight() {
+  test -n "$ANYDBVER_SKIP_PREFLIGHT" && return 0
+
+  # Docker Desktop writes credsStore=desktop.exe into the WSL2 config. The
+  # helper is a Windows binary, so every docker push dies with "exec format
+  # error" long after the build has finished.
+  if grep -q '"credsStore"' "${DOCKER_CONFIG:-$HOME/.docker}/config.json" 2>/dev/null; then
+    echo "WARNING: credsStore is set in ${DOCKER_CONFIG:-$HOME/.docker}/config.json."
+    echo "         Under WSL2 this makes every 'docker push' fail with 'exec format error'."
+    echo "         Remove the credsStore key before pushing, the auths entry works on its own."
+    echo
+  fi
+
+  # Cross-arch builds need the QEMU handler, and the registration does not
+  # survive a WSL2 restart. Without it the build produces the wrong thing
+  # instead of failing.
+  local want host
+  want="${PLATFORM#linux/}"
+  case "$(uname -m)" in
+    aarch64|arm64) host=arm64 ;;
+    *)             host=amd64 ;;
+  esac
+  if [ "$want" != "$host" ]; then
+    if ! ls /proc/sys/fs/binfmt_misc/ 2>/dev/null | grep -q qemu; then
+      echo "ERROR: building $PLATFORM on $host needs QEMU binfmt, which is not registered."
+      echo "       It does not survive a WSL2 restart. Re-arm it with:"
+      echo "         docker run --privileged --rm tonistiigi/binfmt --install $want"
+      exit 1
+    fi
+  fi
+}
+preflight
 test -f ../secret/id_rsa || ssh-keygen -t rsa -f ../secret/id_rsa -P ''
 cd centos7
 cp ../../tools/node_ip.sh ../common/rc.local ./
