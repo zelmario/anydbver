@@ -386,7 +386,12 @@ the ones you will use most often.
 | `cluster-name=db1`      | Logical cluster name created by the operator       |
 | `db-version=13`         | DB version the operator should provision           |
 | `storage=2Gi`           | PVC size per instance (k8s-cnpg, k8s-crunchy)      |
+| `expose`                | LoadBalancer on the primary, NodePorts on the rest (k8s-crunchy) |
+| `bucket=name`           | pgBackRest S3 bucket (k8s-crunchy, default `operator-testing`) |
+| `s3=URL`                | External S3 endpoint for pgBackRest (k8s-crunchy)  |
+| `region=eu-west-1`      | S3 region (k8s-crunchy, default `us-east-1`)       |
 | `memory=1Gi`            | Memory request/limit per instance                  |
+| `sql=path.sql`          | SQL file loaded into the new cluster (k8s-cnpg, k8s-crunchy) |
 | `helm`                  | Install the operator via Helm                      |
 | `standby`               | Create a standby cluster (k8s-pg)                  |
 | `proxysql`              | Enable ProxySQL in the cluster (k8s-pxc)           |
@@ -691,6 +696,12 @@ anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17,storage=5Gi
 # Crunchy PGO 6.0 in its own namespace
 anydbver deploy k3d k8s-crunchy:6.0.2,cluster-name=db1,namespace=pg1
 
+# Crunchy with pgBackRest backups going to MinIO over HTTPS
+anydbver deploy k3d k8s-minio:latest,certs=self-signed cert-manager k8s-crunchy:5.8.8,replicas=1
+
+# Crunchy reachable from the host, backups in a real S3 bucket
+anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,expose,s3=https://KEY:SECRET@s3.eu-west-1.amazonaws.com/my-backups,region=eu-west-1
+
 # PSMDB operator 1.20 with custom cluster domain
 anydbver deploy \
   k3d:v1.25.16-k3s4,cluster-domain=percona.local \
@@ -754,8 +765,25 @@ that the Percona PostgreSQL operator is forked from:
   `<cluster-name>-pguser-<cluster-name>` secret, and the endpoints are
   `<cluster-name>-primary`, `<cluster-name>-replicas` and
   `<cluster-name>-pgbouncer`.
-- No cert-manager is needed, and PMM / MinIO backup integration is not wired up
-  for Crunchy yet.
+- Deploying `k8s-minio` alongside it points pgBackRest `repo1` at the MinIO
+  bucket, and `repo2` stays on a local volume. PGO writes its replica-create
+  backup to `repo1`, so the first backup lands in the bucket right after the
+  cluster comes up. `anydbver deploy ... info` prints a `pgbackrest info`
+  command to check it.
+- **MinIO has to be deployed with TLS**, so pair it with `cert-manager`:
+  `k8s-minio:latest,certs=self-signed cert-manager k8s-crunchy:5.8.8`.
+  pgBackRest only speaks HTTPS to S3 and fails the whole stanza on a plain HTTP
+  endpoint, so a MinIO without certificates is skipped with a warning and the
+  cluster keeps its local volume repositories.
+- `bucket=`, `region=` and `s3=https://KEY:SECRET@host:port/bucket` override the
+  target, the last one for a real S3 or an external MinIO. Certificate
+  verification is off, these are test buckets.
+- `expose` puts the `<cluster-name>-ha` service (the one Patroni points at the
+  leader) on a LoadBalancer, and gives `-replicas` and `-pgbouncer` NodePorts.
+  They cannot all be LoadBalancers: k3s binds host port 5432 for each one, so
+  the second and third would sit Pending for ever. `-primary` is headless and
+  cannot be exposed at all.
+- PMM integration is not wired up for Crunchy, it patches Percona CR fields.
 
 ### PMM HA on Kubernetes (Tech Preview)
 

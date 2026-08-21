@@ -1,6 +1,6 @@
 # Topologies — recipes per family
 
-> Verified on 2026-05-07. Each section: deploy command → expected node layout → host-side artifacts → verification → "use this when". Versions will drift; pin for bug repro.
+> Verified on 2026-08-21. Each section: deploy command → expected node layout → host-side artifacts → verification → "use this when". Versions will drift; pin for bug repro.
 
 ## Contents
 
@@ -303,6 +303,12 @@ anydbver deploy k3d k8s-crunchy:5.8.8                                # 3 instanc
 anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17       # single instance, PG 17
 anydbver deploy k3d k8s-crunchy:5.8.8,storage=5Gi,memory=1Gi         # size the instances
 anydbver deploy k3d k8s-crunchy:6.0.2,cluster-name=db1,namespace=pg1
+
+# pgBackRest repo1 on MinIO over HTTPS
+anydbver deploy k3d k8s-minio:latest,certs=self-signed cert-manager k8s-crunchy:5.8.8,replicas=1
+
+# LoadBalancer services, backups in a real S3 bucket
+anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,expose,s3=https://KEY:SECRET@s3.eu-west-1.amazonaws.com/my-backups,region=eu-west-1
 ```
 
 **Verify.** `kubectl get postgrescluster -A; kubectl -n crunchy get pods`
@@ -317,7 +323,13 @@ anydbver deploy k3d k8s-crunchy:6.0.2,cluster-name=db1,namespace=pg1
 - The Patroni leader carries `postgres-operator.crunchydata.com/role=master`, not `primary`.
 - Images pull anonymously from `registry.developers.crunchydata.com`. New git tags often
   have no image yet, anydbver checks before deploying.
-- No cert-manager needed. PMM and MinIO backups are **not** wired up for Crunchy.
+- MinIO backups work: `k8s-minio:latest,certs=self-signed` plus `cert-manager` alongside puts
+  pgBackRest `repo1` on the bucket and leaves `repo2` on a volume. The replica-create backup
+  fills it immediately. TLS is required, pgBackRest refuses plain HTTP S3. `s3=`, `bucket=`
+  and `region=` point it at an external S3 instead. PMM is still **not** wired up for Crunchy.
+- `expose` puts `<cluster>-ha` (Patroni's leader service) on a LoadBalancer and gives
+  `-replicas` and `-pgbouncer` NodePorts — three LoadBalancers would fight over host port
+  5432. `<cluster>-primary` is headless and cannot be exposed.
 - `kubectl -n <ns> exec -it <pod> -c database -- psql -U postgres`. Endpoints
   `<cluster>-primary` / `-replicas` / `-pgbouncer`; user in `<cluster>-pguser-<cluster>`.
 

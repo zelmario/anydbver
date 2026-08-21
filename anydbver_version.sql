@@ -2837,6 +2837,8 @@ INSERT INTO tests VALUES(50,'cloudnative-pg operator','anydbver deploy k3d k8s-c
 INSERT INTO tests VALUES(51,'cloudnative-pg single instance pg17','anydbver deploy k3d k8s-cnpg:1.30.0,replicas=1,db-version=17');
 INSERT INTO tests VALUES(52,'crunchy postgres operator','anydbver deploy k3d k8s-crunchy:5.8.8');
 INSERT INTO tests VALUES(53,'crunchy postgres single instance pg17','anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17');
+INSERT INTO tests VALUES(54,'crunchy postgres pgbackrest backups to minio','anydbver deploy k3d k8s-minio:latest,certs=self-signed cert-manager k8s-crunchy:5.8.8,replicas=1');
+INSERT INTO tests VALUES(55,'crunchy postgres exposed with a load balancer','anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,expose');
 CREATE TABLE test_cases(
   test_id int,
   cmd varchar(1000)
@@ -4093,6 +4095,10 @@ INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','storage','%','','-
 INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','db-version','%','DB_VERSION','--db-version','',1,NULL);
 INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','memory','%','','--memory','',1,NULL);
 INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','sql','%','URL','--sql','',1,NULL);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','expose','%',NULL,'--expose','',1,NULL);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','bucket','%','','--bucket','',1,NULL);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','s3','%','','--backup-url','',1,NULL);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','region','%','','--s3-region','us-east-1',1,NULL);
 CREATE TABLE version_sources(
   keyword varchar(50),       -- keyword shown / accepted by `anydbver versions <keyword>`
   display_name varchar(100), -- human-readable software name

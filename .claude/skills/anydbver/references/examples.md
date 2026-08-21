@@ -1,6 +1,6 @@
 # Examples by scenario
 
-> Verified on 2026-06-04. Every command below is a real, documented example — verbatim from `instructions.md`, `MONGO.md`, `CACHING.md`, or `anydbver deploy help <keyword>`. Versions in these examples will drift; pin explicitly when you reproduce a bug.
+> Verified on 2026-08-21. Every command below is a real, documented example — verbatim from `instructions.md`, `MONGO.md`, `CACHING.md`, or `anydbver deploy help <keyword>`. Versions in these examples will drift; pin explicitly when you reproduce a bug.
 
 Tear down between scenarios with `anydbver destroy` (or use `--namespace=<name>` to keep them parallel).
 
@@ -270,6 +270,12 @@ anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,db-version=17,storage=5Gi
 
 # Crunchy PGO 6.0 (v1 PostgresCluster API) in its own namespace
 anydbver deploy k3d k8s-crunchy:6.0.2,cluster-name=db1,namespace=pg1
+
+# Crunchy with pgBackRest repo1 on MinIO (HTTPS, cert-manager issued)
+anydbver deploy k3d k8s-minio:latest,certs=self-signed cert-manager k8s-crunchy:5.8.8,replicas=1
+
+# Crunchy exposed on LoadBalancer services, backups in a real S3 bucket
+anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,expose,s3=https://KEY:SECRET@s3.eu-west-1.amazonaws.com/my-backups,region=eu-west-1
 
 # PSMDB operator 1.20 with custom cluster domain
 anydbver deploy \

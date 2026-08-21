@@ -206,7 +206,11 @@ def prepare_operator_repository(data_path, operator_name, operator_version):
         run_fatal(["git", "fetch", "--unshallow"],
                   "Can't get full repository {}".format(os.getcwd()),
                   ignore_msg="on a complete repository does not make sense")
-        run_fatal(["git", "fetch", "--tags", "--all",],
+        # --force: upstream sometimes moves a tag (Crunchy re-pointed v5.8.9 and
+        # v6.0.3), and a plain fetch then refuses the whole run with
+        # "would clobber existing tag". The checkout is a cache that gets reset
+        # right after, so taking the remote's version is always what we want.
+        run_fatal(["git", "fetch", "--tags", "--force", "--all"],
                   "Can't fetch new changes from operator repository at {}".format(os.getcwd()))
         run_fatal(["git", "reset", "--hard"],
                   "Can't reset operator repository")
@@ -891,6 +895,25 @@ def soft_params(opt):
     return params
 
 
+def minio_tls_enabled(args):
+    """True when the MinIO helm release listens on https.
+
+    run_minio_server makes this call while it installs MinIO. An operator
+    deployment is a separate run of this script, so it has to reach the same
+    conclusion from the same arguments to know whether backups go to
+    https://...:443 or to http://...:9000. Sets args.minio_custom_ssl on the
+    way, run_minio_server reads it again when it builds the helm command.
+    """
+    tls_key_path = Path(args.anydbver_path) / args.minio_certs / "tls.key"
+    tls_crt_path = Path(args.anydbver_path) / args.minio_certs / "tls.crt"
+    args.minio_custom_ssl = (args.minio_certs != ""
+                             and args.minio_certs != "self-signed"
+                             and tls_key_path.is_file()
+                             and tls_crt_path.is_file())
+    return ((args.cert_manager != "" and args.minio_certs == "self-signed")
+            or args.minio_custom_ssl)
+
+
 def run_minio_server(args):
     params = soft_params(args.minio)
     if "certs" in params:
@@ -905,10 +928,7 @@ def run_minio_server(args):
         logger.info("Loading minio secrets from {} and {}".format(
             str(tls_key_path.resolve()), str(tls_crt_path.resolve())))
 
-    args.minio_custom_ssl = (args.minio_certs != ""
-                             and args.minio_certs != "self-signed"
-                             and tls_key_path.is_file()
-                             and tls_crt_path.is_file())
+    minio_tls = minio_tls_enabled(args)
 
     if args.cert_manager != "" and args.minio_certs == "self-signed":
         gen_self_signed_cert(args, "s3." + args.cluster_domain,
@@ -944,7 +964,7 @@ def run_minio_server(args):
             "--set", "ingress.tls=true",
             "--set", "ingress.hostname={}".format(params["dns"])
         ]
-    if (args.cert_manager != "" and args.minio_certs == "self-signed") or args.minio_custom_ssl:
+    if minio_tls:
         helm_cmd = helm_cmd + ["--set", "tls.enabled=true",
                                "--set", "tls.certSecret=minio-service-tls",
                                "--set", "tls.publicCrt=tls.crt",
@@ -1178,6 +1198,101 @@ type: Opaque
         f.writelines(pg_minio_secret_repo)
     run_fatal(["kubectl", "apply", "-n", args.namespace, "-f",
               minio_cred_path], "Can't apply s3 secrets")
+
+
+def enable_crunchy_s3(args):
+    """Point Crunchy's pgBackRest repo1 at MinIO, or at the endpoint given with s3=.
+
+    Percona's PG operator is a fork of Crunchy PGO, so the CR fields are the
+    ones enable_pgv2_s3 already patches: a repos[] entry carrying s3 instead of
+    volume, plus a Secret holding the pgBackRest s3.conf with the credentials.
+    repo1 is the repository PGO writes the replica-create backup to, so
+    converting that one means the very first backup already lands in the bucket.
+    The example CR keeps repo2 on a volume, which leaves a local repository next
+    to the remote one.
+    """
+    deploy_path = Path(args.data_path) / args.operator_name / "deploy"
+    cr_yaml_path = str((deploy_path / "cr.yaml").resolve())
+
+    bucket = args.bucket if args.bucket != "" else "operator-testing"
+    region = args.s3_region
+    key = "REPLACE-WITH-AWS-ACCESS-KEY"
+    key_secret = "REPLACE-WITH-AWS-SECRET-KEY"
+
+    # pgBackRest speaks HTTPS to S3 and nothing else: a plain http endpoint
+    # fails the stanza with "expected protocol 'https' in URL", which also takes
+    # the local volume repository down with it.
+    if args.backup_url:
+        urlparts = urllib.parse.urlparse(args.backup_url)
+        proto = urlparts.scheme if urlparts.scheme else "https"
+        if proto != "https":
+            raise Exception(
+                "pgBackRest only talks to S3 over HTTPS, {} is not usable as a "
+                "backup target".format(args.backup_url))
+        port = urlparts.port if urlparts.port else 443
+        srv = urlparts.hostname
+        if urlparts.username:
+            key = urllib.parse.unquote(urlparts.username)
+        if urlparts.password:
+            key_secret = urllib.parse.unquote(urlparts.password)
+        if urlparts.path.strip("/") != "":
+            bucket = urlparts.path.strip("/")
+    else:
+        if not minio_tls_enabled(args):
+            logger.warning(
+                "MinIO was deployed without TLS and pgBackRest only talks to S3 "
+                "over HTTPS, so backups stay on the local volume repository. "
+                "Add the cert-manager keyword, or k8s-minio:latest,certs=self-signed "
+                "together with cert-manager, to back up to MinIO")
+            return
+        proto, port = "https", 443
+        srv = "minio-service.default.svc.{}".format(args.cluster_domain)
+
+    endpoint = "{}://{}:{}".format(proto, srv, port)
+    logger.info("Crunchy pgBackRest repo1: bucket {} on {}".format(
+        bucket, endpoint))
+
+    run_fatal(
+        [
+            args.yq,
+            '(del(.spec.backups.pgbackrest.repos[0].volume))|'
+            '(.spec.backups.pgbackrest.configuration[0].secret.name="{cluster_name}-pgbackrest-secrets")|'
+            '(.spec.backups.pgbackrest.repos[0].name="repo1")|'
+            '(.spec.backups.pgbackrest.repos[0].s3.bucket="{bucket}")|'
+            '(.spec.backups.pgbackrest.repos[0].s3.region="{region}")|'
+            '(.spec.backups.pgbackrest.repos[0].s3.endpoint="{endpoint}")'.format(
+                bucket=bucket, region=region, endpoint=endpoint,
+                cluster_name=args.cluster_name),
+            "-i",
+            cr_yaml_path], "Can't point pgBackRest repo1 at s3")
+
+    # A test bucket is served with a self-signed certificate more often than
+    # not, and pgBackRest fails the whole backup on a certificate it can't
+    # verify, so verification stays off. MinIO needs path style addressing,
+    # bucket.host virtual style does not resolve inside the cluster.
+    s3_conf = """\
+[global]
+repo1-s3-key={key}
+repo1-s3-key-secret={key_secret}
+repo1-storage-verify-tls=n
+repo1-s3-uri-style=path
+""".format(key=key, key_secret=key_secret)
+
+    secret_path = str(
+        (deploy_path / "{}-pgbackrest-secrets.yaml".format(args.cluster_name)).resolve())
+    with open(secret_path, "w+") as f:
+        f.write("""\
+apiVersion: v1
+data:
+  s3.conf: {s3conf}
+kind: Secret
+metadata:
+  name: {cluster_name}-pgbackrest-secrets
+type: Opaque
+""".format(s3conf=base64.b64encode(bytes(s3_conf, 'utf-8')).decode('utf-8'),
+           cluster_name=args.cluster_name))
+    run_fatal(["kubectl", "apply", "-n", args.namespace, "-f", secret_path],
+              "Can't apply the pgBackRest s3 secret")
 
 
 def enable_minio(args):
@@ -1670,6 +1785,19 @@ def setup_operator(args):
         if args.memory:
             set_yaml('.spec.instances[0].resources.limits.memory="{mem}" | .spec.instances[0].resources.requests.memory="{mem}"'.format(mem=args.memory),
                      "set memory limit")
+        if args.expose:
+            # spec.service drives the <cluster>-ha service, the one Patroni
+            # points at the current leader. <cluster>-primary is headless and
+            # cannot be exposed at all.
+            # Only one service can own host port 5432: k3s servicelb runs a
+            # DaemonSet per LoadBalancer that binds the port on every node, so
+            # making all three LoadBalancers leaves two of them Pending for
+            # ever. The replicas and pgBouncer services get a NodePort instead,
+            # which works next to the LoadBalancer on the primary.
+            set_yaml('.spec.service.type="LoadBalancer" | '
+                     '.spec.replicaService.type="NodePort" | '
+                     '.spec.proxy.pgBouncer.service.type="NodePort"',
+                     "expose Crunchy PG services")
 
     if args.operator_name == CNPG_OPERATOR:
         # PMM and MinIO wiring patches Percona specific CR fields, which do not
@@ -1681,14 +1809,14 @@ def setup_operator(args):
             logger.warning(
                 "MinIO backups are not supported for CloudNativePG yet, the MinIO server is deployed but not configured as a backup target")
     elif args.operator_name == CRUNCHY_OPERATOR:
-        # Same reason: enable_pmm and enable_minio patch Percona CR fields that
-        # a Crunchy PostgresCluster does not have.
+        # Same reason: enable_pmm patches Percona CR fields that a Crunchy
+        # PostgresCluster does not have. pgBackRest it shares, so backups do
+        # get wired up.
         if args.pmm != "":
             logger.warning(
                 "PMM integration is not supported for Crunchy Postgres, ignoring")
-        if args.minio:
-            logger.warning(
-                "MinIO backups are not supported for Crunchy Postgres yet, the MinIO server is deployed but not configured as a backup target")
+        if args.minio or args.backup_url:
+            enable_crunchy_s3(args)
     else:
         enable_pmm(args)
 
@@ -1980,6 +2108,15 @@ def info_crunchy_operator(ns, cluster_name):
         if container != "":
             print("kubectl -n {} exec -it {} -c database -- env PSQL_HISTORY=/tmp/.psql_history psql -U postgres".format(
                 subprocess.list2cmdline([ns]), container))
+    for container in get_containers_list(ns, "postgres-operator.crunchydata.com/cluster={},postgres-operator.crunchydata.com/pgbackrest-dedicated=".format(cluster_name)):
+        if container != "":
+            # The stanza is always called db, PGO does not make it configurable.
+            print("kubectl -n {} exec -it {} -c pgbackrest -- pgbackrest info --stanza=db".format(
+                subprocess.list2cmdline([ns]), container))
+    # With expose the primary is a LoadBalancer on 5432 and the other two are
+    # NodePorts, without it all three are ClusterIP.
+    print("Connection endpoints: kubectl -n {} get svc {}-ha {}-replicas {}-pgbouncer".format(
+        subprocess.list2cmdline([ns]), cluster_name, cluster_name, cluster_name))
 
 
 def operator_info(args):
@@ -2122,6 +2259,8 @@ def main():
     parser.add_argument('--backup-url', dest="backup_url",
                         type=str, default="")
     parser.add_argument('--bucket', dest="bucket", type=str, default="")
+    parser.add_argument('--s3-region', dest="s3_region",
+                        type=str, default="us-east-1")
     parser.add_argument('--gcs-key', dest="gcs_key", type=str, default="")
     parser.add_argument('--minio-certs', dest="minio_certs",
                         type=str, default="")

@@ -1,6 +1,6 @@
 # Options reference (per family)
 
-> Verified on 2026-07-31. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
+> Verified on 2026-08-21. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
 
 ## MySQL / Percona Server / MariaDB / mydb
 
@@ -156,6 +156,10 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 | `storage=5Gi`           | PVC size per instance (k8s-cnpg, k8s-crunchy, default `1Gi`). |
 | `memory=1Gi`            | Memory request/limit per instance (k8s-cnpg, k8s-crunchy). |
 | `sql=path.sql`          | SQL file loaded into the new cluster (k8s-cnpg, k8s-crunchy). |
+| `expose`                | LoadBalancer services for the cluster (k8s-crunchy). |
+| `bucket=name`           | pgBackRest S3 bucket (k8s-crunchy, default `operator-testing`). |
+| `s3=URL`                | External S3 endpoint for pgBackRest, `https://KEY:SECRET@host:port/bucket` (k8s-crunchy). |
+| `region=eu-west-1`      | S3 region (k8s-crunchy, default `us-east-1`).      |
 
 **Gotchas.**
 - K3D RAM appetite: `cert-manager + operator + 3-replica CR ≈ 6–8 GB`. Underprovisioned hosts will see Pending pods and operator CrashLoopBackOff.
@@ -174,7 +178,11 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 - `replicas=N` is the *total* instance count, default 3.
 - `db-version=17` sets `spec.postgresVersion` and only accepts a major the operator ships an image for (15 to 18 on 5.8 / 6.0). A full image reference sets `spec.image` instead.
 - Images pull anonymously from `registry.developers.crunchydata.com`, no account needed. Crunchy tags GitHub before publishing images, so the newest tag may not deploy: anydbver checks the registry and falls back or fails with a clear message. `anydbver versions k8s-crunchy` lists known good ones.
-- PMM and MinIO wiring is skipped with a warning, same reason as CloudNativePG.
+- MinIO backups work: deploy `k8s-minio:latest,certs=self-signed` **and `cert-manager`** alongside, and pgBackRest `repo1` points at the bucket while `repo2` stays a local volume. The replica-create backup goes to `repo1`, so it is populated as soon as the cluster is up.
+- TLS on MinIO is not optional: pgBackRest only talks to S3 over HTTPS and fails the stanza on a plain HTTP endpoint. Without `cert-manager` the wiring is skipped with a warning and the cluster keeps its volume repositories.
+- `s3=https://KEY:SECRET@host:port/bucket` (plus `bucket=` / `region=`) points pgBackRest at an external S3 instead. An `http://` URL is rejected. Certificate verification is off, these are test buckets.
+- `expose` puts `<cluster-name>-ha` (the Patroni leader service) on a LoadBalancer and gives `-replicas` and `-pgbouncer` NodePorts. All three as LoadBalancer would fight over host port 5432 and two would stay Pending. `-primary` is headless and cannot be exposed.
+- PMM wiring is still skipped with a warning, it patches Percona CR fields.
 
 ## PMM HA (k8s-pmm-ha, Tech Preview)
 

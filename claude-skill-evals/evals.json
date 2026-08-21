@@ -221,7 +221,21 @@
         "db-version=17 sets spec.postgresVersion, and only majors the operator ships an image for (15 to 18) are accepted",
         "Says the operator always runs in the postgres-operator namespace and watches every namespace, so namespace= places the PostgresCluster",
         "Verification with kubectl get postgrescluster -A / kubectl -n crunchy get pods, and psql inside the -c database container",
-        "Does NOT claim PMM or MinIO backup integration works with Crunchy"
+        "Does NOT claim PMM integration works with Crunchy (MinIO backups do work, PMM does not)"
+      ]
+    },
+    {
+      "id": "k3d-crunchy-pgbackrest-minio",
+      "prompt": "I want to test a Crunchy Postgres for Kubernetes cluster whose pgBackRest backups go to MinIO, and I need to reach the database from my laptop. Can anydbver set that up?",
+      "expected_output": "A single deploy command combining k8s-minio (with certs=self-signed), cert-manager and k8s-crunchy with expose, plus how to check the backup with pgbackrest info and where the LoadBalancer address shows up.",
+      "expectations": [
+        "Includes k3d to bootstrap the nested cluster",
+        "Deploys k8s-minio and k8s-crunchy in the SAME command, with k8s-minio before the operator keyword",
+        "Adds cert-manager and certs=self-signed, and explains TLS is REQUIRED: pgBackRest only talks to S3 over HTTPS, so a plain HTTP MinIO is skipped with a warning",
+        "Explains that MinIO becomes pgBackRest repo1 while repo2 stays a local volume, and that PGO's replica-create backup lands in the bucket right away",
+        "Uses expose on the k8s-crunchy keyword and says it puts <cluster>-ha on a LoadBalancer while -replicas and -pgbouncer get NodePorts, and that -primary is headless",
+        "Verification with pgbackrest info --stanza=db inside the pgbackrest-dedicated repo host pod, and kubectl get svc for the LoadBalancer addresses",
+        "Does NOT invent a backup= or schedule= option, and does NOT claim PMM works with Crunchy"
       ]
     }
   ]
