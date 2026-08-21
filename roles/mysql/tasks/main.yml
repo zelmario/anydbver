@@ -57,6 +57,15 @@
         name: "{{package_info['repo_url']}}"
         disable_gpg_check: yes
         state: present
+    - name: Enable the mysql repo the requested version lives in
+      # Oracle ships every release stream in its own repo and the release rpm
+      # leaves all but 8.0 disabled, so the version row names the repo to turn
+      # on. Without this, asking for 9.x silently gets you 8.0.
+      when: >
+        mysql_version != '' and package_info and package_info['repo_enable_str'] != '' and
+        (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
+      shell:
+        cmd: "dnf config-manager --disable mysql80-community; dnf config-manager --enable {{package_info['repo_enable_str']}}"
     - name: Enable mysql innovation releases
       when: >
         ( mysql_version.startswith('8.1') or mysql_version.startswith('8.2') or mysql_version.startswith('8.3') ) and
