@@ -430,7 +430,7 @@ def run_pg_operator(ns, op, db_ver, cluster_name, op_ver, standby, backup_type, 
     if db_replicas and op_ver.startswith("1"):
         set_yaml('.spec.pgReplicas.hotStandby.size={replicas}'.format(
             replicas=db_replicas), "Change number of replicas")
-    if db_replicas and op_ver.startswith("2"):
+    if db_replicas and pg_op_ver_at_least(op_ver, "2.0.0"):
         set_yaml('.spec.instances[0].replicas={replicas}'.format(replicas=int(db_replicas)),
                  "Change number of replicas")
 
@@ -461,6 +461,19 @@ def run_pg_operator(ns, op, db_ver, cluster_name, op_ver, standby, backup_type, 
               "./deploy/cr.yaml"], "Can't deploy cluster")
     if not k8s_wait_for_ready(ns, cluster_labels(op, op_ver, cluster_name)):
         raise Exception("cluster is not starting")
+
+
+def pg_op_ver_at_least(op_ver, ver):
+    """Compare a Percona PG operator version, tolerating "main" and branch names.
+
+    Non-numeric versions are treated as the newest series, so they follow the
+    same code path as the latest release instead of falling back to legacy 1.x
+    behaviour.
+    """
+    try:
+        return StrictVersion(op_ver) >= StrictVersion(ver)
+    except (ValueError, AttributeError):
+        return True
 
 
 def op_labels(op, op_ver):
@@ -503,11 +516,14 @@ def cluster_labels(op, op_ver, cluster_name):
     elif op == "percona-server-mongodb-operator":
         return "app.kubernetes.io/instance={},app.kubernetes.io/component=mongod".format(cluster_name)
     elif op == "percona-postgresql-operator":
-        if op_ver.startswith("2"):
-            if StrictVersion(op_ver) >= StrictVersion("2.6.0"):
-                return "postgres-operator.crunchydata.com/cluster={},postgres-operator.crunchydata.com/role=primary".format(cluster_name)
-            else:
-                return "postgres-operator.crunchydata.com/cluster={},postgres-operator.crunchydata.com/role=master".format(cluster_name)
+        # 2.6.0 renamed the Patroni leader role from master to primary. Every
+        # series from 2.0.0 on is Crunchy-PGO based and uses these labels, so
+        # compare numerically instead of matching the "2" prefix: 3.x pods are
+        # labelled the same way and must not fall back to the pre-2.0 selector.
+        if pg_op_ver_at_least(op_ver, "2.6.0"):
+            return "postgres-operator.crunchydata.com/cluster={},postgres-operator.crunchydata.com/role=primary".format(cluster_name)
+        elif pg_op_ver_at_least(op_ver, "2.0.0"):
+            return "postgres-operator.crunchydata.com/cluster={},postgres-operator.crunchydata.com/role=master".format(cluster_name)
         else:
             return "name={}".format(cluster_name)
 
