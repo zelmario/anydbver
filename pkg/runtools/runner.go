@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +24,39 @@ const (
 	ANYDBVER_DOCKER_IMAGE_MIXED_WITH_ANSIBLE = 5
 	ANYDBVER_UNKNOWN_KEYWORD                 = 6
 )
+
+// A long deploy can sit for minutes with no output at all: installing database
+// packages is one ansible task that prints nothing until it finishes, and the
+// worst measured gap is over five minutes. Without a sign of life that reads as
+// a hang, so RunPipe prints a heartbeat whenever a streamed command goes quiet.
+var ansiEscape = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
+
+// quietHeartbeatInterval is how long a command may print nothing before the
+// heartbeat starts, and how often it repeats. ANYDBVER_PROGRESS_INTERVAL
+// overrides it in seconds, 0 turns the heartbeat off.
+func quietHeartbeatInterval() time.Duration {
+	if v := os.Getenv("ANYDBVER_PROGRESS_INTERVAL"); v != "" {
+		if seconds, err := strconv.Atoi(v); err == nil {
+			return time.Duration(seconds) * time.Second
+		}
+	}
+	return 45 * time.Second
+}
+
+func roundDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+}
+
+func lastMeaningfulLine(line string) string {
+	line = strings.TrimSpace(ansiEscape.ReplaceAllString(line, ""))
+	if len(line) > 90 {
+		line = line[:90] + "..."
+	}
+	return line
+}
 
 func HandleDockerProblem(logger *log.Logger, err error) {
 	if strings.Contains(err.Error(), "permission denied while trying to connect") {
@@ -97,6 +132,12 @@ func RunPipe(logger *log.Logger, args []string, errMsg string, ignoreMsg *regexp
 
 	full_output := ""
 	var wg sync.WaitGroup
+
+	var progress sync.Mutex
+	started := time.Now()
+	lastOutput := started
+	lastLine := ""
+
 	// Function to copy the output from the pipes to the logger
 	copyOutput := func(r io.Reader, prefix string) {
 		defer wg.Done()
@@ -104,6 +145,12 @@ func RunPipe(logger *log.Logger, args []string, errMsg string, ignoreMsg *regexp
 		for scanner.Scan() {
 			output_chunk := scanner.Text()
 			full_output = full_output + "\n" + output_chunk
+			progress.Lock()
+			lastOutput = time.Now()
+			if line := lastMeaningfulLine(output_chunk); line != "" {
+				lastLine = line
+			}
+			progress.Unlock()
 			logger.Println(prefix, output_chunk)
 		}
 	}
@@ -111,6 +158,35 @@ func RunPipe(logger *log.Logger, args []string, errMsg string, ignoreMsg *regexp
 	wg.Add(2)
 	go copyOutput(stdoutPipe, "")
 	go copyOutput(stderrPipe, "")
+
+	if interval := quietHeartbeatInterval(); interval > 0 {
+		heartbeatDone := make(chan struct{})
+		defer close(heartbeatDone)
+		go func() {
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-heartbeatDone:
+					return
+				case <-ticker.C:
+					progress.Lock()
+					quiet := time.Since(lastOutput)
+					last := lastLine
+					progress.Unlock()
+					if quiet < interval {
+						continue
+					}
+					msg := fmt.Sprintf("... still working: %s elapsed, quiet for %s",
+						roundDuration(time.Since(started)), roundDuration(quiet))
+					if last != "" {
+						msg = msg + ", last step: " + last
+					}
+					logger.Println(msg)
+				}
+			}
+		}()
+	}
 
 	done := make(chan error)
 	go func() { done <- cmd.Wait() }()

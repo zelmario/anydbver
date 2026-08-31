@@ -112,7 +112,9 @@ func (a *corootApi) projectId() (string, error) {
 // not always carry an application that already exists.
 func (a *corootApi) appId(project string, container string, kind string, timeout time.Duration) (string, error) {
 	guess := project + ":_:Unknown:" + container
-	deadline := time.Now().Add(timeout)
+	started := time.Now()
+	deadline := started.Add(timeout)
+	reported := time.Now()
 	for {
 		if a.appExists(project, guess, kind) {
 			return guess, nil
@@ -122,6 +124,12 @@ func (a *corootApi) appId(project string, container string, kind string, timeout
 		}
 		if time.Now().After(deadline) {
 			return "", fmt.Errorf("coroot did not discover %s within %s", container, timeout)
+		}
+		// This wait is a minute or two of nothing, so say what it is waiting on.
+		if time.Since(reported) >= 20*time.Second {
+			a.logger.Printf("Coroot: waiting for %s to appear in coroot (%ds elapsed, up to %s)",
+				container, int(time.Since(started).Seconds()), timeout)
+			reported = time.Now()
 		}
 		time.Sleep(5 * time.Second)
 	}
@@ -225,6 +233,7 @@ func SetupCoroot(logger *log.Logger, namespace string, servers []string, targets
 	}
 
 	for _, server := range servers {
+		logger.Printf("Coroot: starting the node-agent on %s so it picks up the deployed nodes", server)
 		StartCorootNodeAgent(logger, namespace, server)
 
 		base, err := corootServerURL(logger, namespace, server)

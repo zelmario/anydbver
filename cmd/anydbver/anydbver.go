@@ -637,9 +637,6 @@ func buildCacheImage(logger *log.Logger, deployArgs []string, osver string, user
 		return cacheImageName
 	}
 
-	// Build the cache image
-	logger.Printf("Building cache image %s for deployment %v\n", cacheImageName, deployArgs)
-
 	// Base64 encode the inventory line to safely pass it as a build argument
 	inventoryLineEncoded := base64.StdEncoding.EncodeToString([]byte(inventoryLine))
 
@@ -657,6 +654,7 @@ func buildCacheImage(logger *log.Logger, deployArgs []string, osver string, user
 		configDir := filepath.Dir(anydbver_common.GetConfigPath(logger))
 		dockerfilePath = filepath.Join(configDir, "Dockerfile.anydbver.cache")
 		if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+			logger.Printf("No Dockerfile.anydbver.cache, so no cache image for %v: this node installs its packages from scratch, which takes several minutes\n", deployArgs)
 			return ""
 		} else {
 			// Use config directory as build context if Dockerfile is there
@@ -676,6 +674,8 @@ func buildCacheImage(logger *log.Logger, deployArgs []string, osver string, user
 		"-f", dockerfilePath,
 		cwd,
 	}
+
+	logger.Printf("Building cache image for %v, first time for this combination so it installs packages and takes several minutes (later deploys reuse it)\n", deployArgs)
 
 	errMsg = "Error building cache image"
 	if rc := runtools.RunFatal(logger, buildArgs, errMsg, ignoreMsg, true, env); rc != 0 {
