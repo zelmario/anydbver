@@ -354,6 +354,24 @@ func MakeContainerHostName(logger *log.Logger, namespace string, name string) st
 	return strings.ReplaceAll(prefix+"-"+name, ".", "-")
 }
 
+// ContainerState reports whether a container of this name exists and whether it
+// is running. Used by "deploy --keep" to reuse a node instead of trying to
+// create it again, which would fail on the name.
+func ContainerState(logger *log.Logger, containerName string) (bool, bool) {
+	args := []string{"docker", "ps", "-a", "--filter", "name=^/" + containerName + "$", "--format", "{{.State}}"}
+	env := map[string]string{}
+	ignoreMsg := regexp.MustCompile("ignore this")
+	out, err := runtools.RunGetOutput(logger, args, "Error listing containers", ignoreMsg, false, env, runtools.COMMAND_TIMEOUT)
+	if err != nil {
+		return false, false
+	}
+	state := strings.TrimSpace(out)
+	if state == "" {
+		return false, false
+	}
+	return true, state == "running"
+}
+
 func getContainerIp(provider string, logger *log.Logger, namespace string, containerName string) (string, error) {
 	network := MakeContainerHostName(logger, namespace, "anydbver")
 	if provider == "docker" {

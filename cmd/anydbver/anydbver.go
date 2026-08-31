@@ -59,6 +59,7 @@ type ContainerConfig struct {
 	Memory     string
 	CPUs       string
 	DeployArgs []string // All deployment keywords (e.g., ["postgresql:14"]) for cache image
+	Keep       bool     // deploy --keep: reuse the container if it already exists
 }
 
 func getNetworkName(logger *log.Logger, namespace string) string {
@@ -701,6 +702,25 @@ func createContainer(logger *log.Logger, config ContainerConfig) {
 	provider := config.Provider
 	namespace := config.Namespace
 	user := anydbver_common.GetUser(logger)
+
+	// --keep means "add to the existing environment", so a node that is already
+	// there is reused. Without this docker run fails on the duplicate name and
+	// takes the whole deploy down with it.
+	if config.Keep {
+		containerName := anydbver_common.MakeContainerHostName(logger, namespace, name)
+		if exists, running := anydbver_common.ContainerState(logger, containerName); exists {
+			if !running {
+				logger.Printf("Starting existing container %s (--keep)\n", containerName)
+				env := map[string]string{}
+				ignoreMsg := regexp.MustCompile("ignore this")
+				runtools.RunFatal(logger, []string{"docker", "start", containerName}, "Error starting container", ignoreMsg, true, env)
+			} else {
+				logger.Printf("Reusing running container %s (--keep)\n", containerName)
+			}
+			return
+		}
+	}
+
 	fmt.Printf("Creating container with name %s, OS %s, privileged=%t, provider=%s, namespace=%s...\n", name, osver, privileged, provider, namespace)
 
 	args := []string{
@@ -1256,8 +1276,24 @@ func runOperatorTool(logger *log.Logger, namespace string, name string, run_oper
 	}
 }
 
-func deployHost(provider string, logger *log.Logger, namespace string, name string, ansible_hosts_run_file string, args []string) {
+func deployHost(provider string, logger *log.Logger, namespace string, name string, ansible_hosts_run_file string, args []string, keep bool) {
 	if provider == "docker-image" {
+		// Same reasoning as createContainer: a docker-image node that already
+		// exists is reused rather than recreated. Products with sidecars, like
+		// coroot, create them together with the main container, so the main one
+		// existing means the whole node is there.
+		if keep {
+			containerName := anydbver_common.MakeContainerHostName(logger, namespace, name)
+			if exists, running := anydbver_common.ContainerState(logger, containerName); exists {
+				if !running {
+					env := map[string]string{}
+					ignoreMsg := regexp.MustCompile("ignore this")
+					runtools.RunFatal(logger, []string{"docker", "start", containerName}, "Error starting container", ignoreMsg, true, env)
+				}
+				logger.Printf("Reusing existing %s (--keep)\n", containerName)
+				return
+			}
+		}
 		for _, arg := range args {
 			deployment_keyword := ParseDeploymentKeyword(logger, arg)
 			// coroot-client creates no container of its own, it registers the
@@ -1899,7 +1935,7 @@ func validateDeployKeywords(logger *log.Logger, args []string) {
 	os.Exit(runtools.ANYDBVER_UNKNOWN_KEYWORD)
 }
 
-func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider string, namespace string, args []string, verbose bool, memory string, cpus string) {
+func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider string, namespace string, args []string, verbose bool, memory string, cpus string, keep bool) {
 	privileged := ""
 	re_lastosver := regexp.MustCompile(`=[^=]+$`)
 	osvers := "node0=el8"
@@ -1981,13 +2017,13 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 			}
 		}
 
-		containers = append(containers, ContainerConfig{Name: node, OSVersion: value, Privileged: privileged_container, ExposePort: expose_port, Provider: nodeProvider[node], Namespace: namespace, Memory: memory, CPUs: cpus, DeployArgs: deployArgs})
+		containers = append(containers, ContainerConfig{Name: node, OSVersion: value, Privileged: privileged_container, ExposePort: expose_port, Provider: nodeProvider[node], Namespace: namespace, Memory: memory, CPUs: cpus, DeployArgs: deployArgs, Keep: keep})
 	}
 	// Add docker-image nodes to containers list for network creation
 	// (docker-image nodes are stripped from osvers so ConvertStringToMap skips them)
 	for node, prov := range nodeProvider {
 		if prov == "docker-image" {
-			containers = append(containers, ContainerConfig{Name: node, Provider: "docker-image", Namespace: namespace})
+			containers = append(containers, ContainerConfig{Name: node, Provider: "docker-image", Namespace: namespace, Keep: keep})
 		}
 	}
 	createNamespace(logger, containers, namespace)
@@ -2003,7 +2039,7 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 	for _, k := range nodeIdxs {
 		nodeName := fmt.Sprintf("node%d", k)
 		nodeDef := nodeDefinitions[nodeName]
-		deployHost(nodeProvider[nodeName], logger, namespace, nodeName, ansible_hosts_run_file, nodeDef)
+		deployHost(nodeProvider[nodeName], logger, namespace, nodeName, ansible_hosts_run_file, nodeDef, keep)
 	}
 
 	for _, k := range nodeIdxs {
@@ -2594,7 +2630,7 @@ func main() {
 			if !keep {
 				deleteNamespace(logger, provider, namespace)
 			}
-			deployHosts(logger, anydbver_common.GetAnsibleInventory(logger, namespace), provider, namespace, args, verbose, memory, cpus)
+			deployHosts(logger, anydbver_common.GetAnsibleInventory(logger, namespace), provider, namespace, args, verbose, memory, cpus, keep)
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) != 0 {
