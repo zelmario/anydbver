@@ -30,6 +30,7 @@ If you only read one section, read [Command Anatomy](#command-anatomy) and
    - [MongoDB sharded cluster](#mongodb-sharded-cluster)
    - [Backups (pgbackrest, PBM, MinIO)](#backups-pgbackrest-pbm-minio)
    - [PMM (monitoring)](#pmm-monitoring)
+   - [Coroot (monitoring)](#coroot-monitoring)
    - [Kubernetes operators (k3d)](#kubernetes-operators-k3d)
    - [LDAP / Kerberos authentication](#ldap--kerberos-authentication)
    - [Shared storage with NFS](#shared-storage-with-nfs)
@@ -197,6 +198,8 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `pmm-server`         | `pmm`   | Percona Monitoring and Management server |
 | `pmm-client`         |         | Percona Monitoring and Management agent |
 | `k8s-pmm`            |         | PMM running inside Kubernetes           |
+| `coroot-server`      | `coroot` | Coroot observability server (eBPF + DB metrics) |
+| `coroot-client`      | `coroot-agent` | Registers a database with a coroot server |
 
 ### Object storage
 
@@ -649,6 +652,54 @@ anydbver deploy \
   container — the client needs `server=node0:8443`.
 - In both cases, pick the **host** port for the UI with `port=12443`
   (or any free port).
+
+### Coroot (monitoring)
+
+[Coroot](https://coroot.com/) is an open-source alternative to PMM. It reads
+per-database metrics with its cluster-agent and maps traffic between nodes with
+eBPF.
+
+```sh
+# Coroot + a 3-node PSMDB replica set
+anydbver deploy node0 coroot \
+  node1 psmdb:latest,replica-set=rs0 coroot-client:server=node0 \
+  node2 psmdb:latest,replica-set=rs0,master=node1 coroot-client:server=node0 \
+  node3 psmdb:latest,replica-set=rs0,master=node1 coroot-client:server=node0
+
+# Coroot on a fixed UI port, monitoring one Percona Server node
+anydbver deploy node0 coroot:port=9080 \
+  node1 ps:latest coroot-client:server=node0
+
+# Coroot watching a Postgres primary and its replica
+anydbver deploy node0 coroot \
+  node1 ppg:17 coroot-client:server=node0 \
+  node2 ppg:17,master=node1 coroot-client:server=node0
+```
+
+- `coroot` selects docker-image mode on its own, you do not write
+  `docker-image`. It brings up five containers: the UI, Prometheus,
+  ClickHouse, a cluster-agent and a node-agent. `anydbver destroy` removes
+  all of them.
+- The UI is published on a random host port unless you pass `port=`. The
+  deploy prints the URL, the user `admin` and the default password.
+- `coroot-client` installs nothing on the database node. It reads the type
+  and credentials from the database keyword next to it and registers that
+  node with the coroot server over the API. Override with `user=`,
+  `password=` or `port=` when the database is not using anydbver defaults.
+- Databases coroot can scrape: PSMDB / MongoDB, PostgreSQL / Percona PG,
+  Percona Server / MySQL / MariaDB / PXC, and Valkey / Redis.
+- On PostgreSQL you get every metric except per-query statistics. Those need
+  `pg_stat_statements` in `shared_preload_libraries`, which anydbver does not
+  set, and coroot logs `relation "pg_stat_statements" does not exist` until
+  you add it yourself.
+
+**Docker Desktop and WSL2 limitation.** The coroot node-agent only tracks
+containers and processes that already existed when it started, so anydbver
+starts it after the databases are up. Resource metrics, the node inventory,
+the connection map between database nodes and all the cluster-agent database
+metrics work. What does not work there is eBPF query capture for clients you
+start afterwards, because the agent cannot resolve their process ids. On
+native Linux Docker the agent sees them normally.
 
 ### Kubernetes operators (k3d)
 

@@ -1093,6 +1093,15 @@ func ParseDeploymentKeyword(logger *log.Logger, keyword string) DeploymentKeywor
 		}
 	}
 
+	// coroot ships only as a docker image, there is no ansible role for it, so
+	// it selects the docker-image provider on its own instead of making the
+	// user write "coroot:docker-image".
+	if deployCmd == "coroot-server" {
+		if _, ok := args["docker-image"]; !ok {
+			args["docker-image"] = ""
+		}
+	}
+
 	return DeploymentKeywordData{
 		Cmd:  deployCmd,
 		Args: args,
@@ -1251,6 +1260,12 @@ func deployHost(provider string, logger *log.Logger, namespace string, name stri
 	if provider == "docker-image" {
 		for _, arg := range args {
 			deployment_keyword := ParseDeploymentKeyword(logger, arg)
+			// coroot-client creates no container of its own, it registers the
+			// database with a coroot server after the deploy, so it is allowed
+			// next to a docker-image database.
+			if deployment_keyword.Cmd == "coroot-client" {
+				continue
+			}
 			if _, ok := deployment_keyword.Args["docker-image"]; ok {
 				unmodified_docker.CreateContainer(logger, namespace, name, deployment_keyword.Cmd, deployment_keyword.Args)
 			} else {
@@ -2005,6 +2020,108 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 	}
 
 	runPlaybook(logger, namespace, ansible_hosts_run_file, verbose)
+
+	corootServers, corootTargets := buildCorootTargets(logger, nodeDefinitions, nodeIdxs)
+	unmodified_docker.SetupCoroot(logger, namespace, corootServers, corootTargets)
+}
+
+// dbArgDefault reads the default value of a database keyword's argument, so
+// coroot-client picks up the same credentials the database was deployed with.
+func dbArgDefault(logger *log.Logger, cmd string, subcmd string) string {
+	db, err := sql.Open("sqlite", anydbver_common.GetDatabasePath(logger))
+	if err != nil {
+		return ""
+	}
+	defer db.Close()
+	var value string
+	err = db.QueryRow(
+		`select arg_default from ansible_arguments where cmd = ? and subcmd = ? limit 1`,
+		cmd, subcmd).Scan(&value)
+	if err != nil {
+		return ""
+	}
+	return value
+}
+
+// buildCorootTargets returns the coroot server nodes in a deploy, and the
+// databases to register with them. The database type and credentials come from
+// the database keyword deployed next to each "coroot-client", and can be
+// overridden with user= and password= on coroot-client itself.
+func buildCorootTargets(logger *log.Logger, nodeDefinitions map[string][]string, nodeIdxs []int) ([]string, []unmodified_docker.CorootTarget) {
+	servers := []string{}
+	targets := []unmodified_docker.CorootTarget{}
+	for _, k := range nodeIdxs {
+		nodeName := fmt.Sprintf("node%d", k)
+		var client *DeploymentKeywordData
+		var database *DeploymentKeywordData
+		var dbType, dbPort string
+
+		for _, arg := range nodeDefinitions[nodeName] {
+			keyword := ParseDeploymentKeyword(logger, arg)
+			if keyword.Cmd == "coroot-server" {
+				servers = append(servers, nodeName)
+				continue
+			}
+			if keyword.Cmd == "coroot-client" {
+				kw := keyword
+				client = &kw
+				continue
+			}
+			if t, port := unmodified_docker.CorootInstrumentationType(keyword.Cmd); t != "" {
+				kw := keyword
+				database = &kw
+				dbType, dbPort = t, port
+			}
+		}
+
+		if client == nil {
+			continue
+		}
+		server, ok := client.Args["server"]
+		if !ok {
+			logger.Printf("Coroot: %s has coroot-client without server=<node>, skipping", nodeName)
+			continue
+		}
+		if database == nil {
+			logger.Printf("Coroot: %s has coroot-client but no database to monitor, skipping", nodeName)
+			continue
+		}
+
+		target := unmodified_docker.CorootTarget{
+			Server:   server,
+			Node:     nodeName,
+			Type:     dbType,
+			Port:     dbPort,
+			User:     dbArgDefault(logger, database.Cmd, "user"),
+			Password: dbArgDefault(logger, database.Cmd, "password"),
+		}
+		// A docker-image database is set up by its own entrypoint, not by the
+		// ansible role, so it uses the official image's admin user and the
+		// shared anydbver password instead of the role defaults.
+		if _, isDockerImage := database.Args["docker-image"]; isDockerImage {
+			target.Password = anydbver_common.ANYDBVER_DEFAULT_PASSWORD
+			if dbType == "mongodb" {
+				target.User = "admin"
+			}
+		}
+		if user, ok := database.Args["user"]; ok {
+			target.User = user
+		}
+		if password, ok := database.Args["password"]; ok {
+			target.Password = password
+		}
+		if user, ok := client.Args["user"]; ok {
+			target.User = user
+		}
+		if password, ok := client.Args["password"]; ok {
+			target.Password = password
+		}
+		if port, ok := client.Args["port"]; ok {
+			target.Port = port
+		}
+		targets = append(targets, target)
+	}
+	return servers, targets
 }
 
 func printVersion() {

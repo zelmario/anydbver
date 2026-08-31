@@ -61,6 +61,11 @@ func CreateContainer(logger *log.Logger, namespace string, name string, cmd stri
 			args["docker-image"] = "minio/minio"
 		}
 		CreateMinIOContainer(logger, namespace, name, cmd, args)
+	} else if cmd == "coroot-server" {
+		if args["docker-image"] == "" {
+			args["docker-image"] = "ghcr.io/coroot/coroot"
+		}
+		CreateCorootContainer(logger, namespace, name, cmd, args)
 	}
 }
 

@@ -4153,6 +4153,8 @@ INSERT INTO keyword_aliases VALUES('cloudnative-pg-operator','k8s-cnpg');
 INSERT INTO keyword_aliases VALUES('cloudnative-pg-operator','cnpg');
 INSERT INTO keyword_aliases VALUES('crunchy-postgres-operator','k8s-crunchy');
 INSERT INTO keyword_aliases VALUES('crunchy-postgres-operator','crunchy');
+INSERT INTO keyword_aliases VALUES('coroot-server','coroot');
+INSERT INTO keyword_aliases VALUES('coroot-client','coroot-agent');
 CREATE TABLE subcmd_aliases(keyword TEXT,alias TEXT);
 INSERT INTO subcmd_aliases VALUES('master','primary');
 CREATE TABLE help_examples(cmd varchar(100), deploy varchar(1000));
