@@ -4074,7 +4074,8 @@ INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','standby','%','',
 INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','replicas','%','','--db-replicas','3',1,1);
 INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','shards','%','','--db-shards','1',1,1);
 INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','replicas','%','','--db-replicas','3',1,1);
-INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','db-version','%','DB_VERSION','--db-version','17',1,1);
+INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','db-version','2.%','DB_VERSION','--db-version','17',1,1);
+INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','db-version','3.%','DB_VERSION','--db-version','',1,NULL);
 INSERT INTO k8s_arguments VALUES('k3d','ingress','%','','--ingress-port','443',1,NULL);
 INSERT INTO k8s_arguments VALUES('k3d','ingress-type','%','','--ingress','',1,NULL);
 INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','proxysql','%','','--proxysql','',1,NULL);

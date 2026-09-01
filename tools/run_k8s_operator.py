@@ -403,6 +403,68 @@ def info_pg_operator(ns, cluster_name):
                 subprocess.list2cmdline([ns]), container))
 
 
+
+def newest_distribution_pg_tag(major):
+    """Newest percona-distribution-postgresql tag for a PG major, or None.
+
+    Operator 3.x stopped shipping the postgres image as a tag on the operator
+    repository and points at percona/percona-distribution-postgresql instead,
+    whose tags are plain upstream versions ("18.6", "17.11.1-1"). There is no
+    major-only alias outside the -ubi8 flavour, so the major has to be resolved
+    to a real tag before the image can be retagged.
+    """
+    url = ("https://hub.docker.com/v2/repositories/percona/"
+           "percona-distribution-postgresql/tags?page_size=100&ordering=last_updated")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "anydbver/tag-lookup"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            tags = [t["name"] for t in json.loads(resp.read().decode("utf-8"))["results"]]
+    except Exception as e:
+        logger.warning("Can't list percona-distribution-postgresql tags: {}".format(e))
+        return None
+    matching = [t for t in tags
+                if re.fullmatch(r"{}\.\d+(\.\d+)?(-\d+)?".format(re.escape(str(major))), t)]
+    if not matching:
+        return None
+    return sorted(matching, key=lambda t: [int(x) for x in re.findall(r"\d+", t)])[-1]
+
+
+def set_pg_major_in_images(db_ver):
+    """Point cr.yaml at images for the requested PG major.
+
+    Two schemes to cope with. Operator 2.x tags every component on the operator
+    repository as "<op>-ppg<major>-<component>", and only the major-only alias
+    exists across majors. Operator 3.x uses separate repositories with their own
+    versions, where only the postgres image is tied to the PG major.
+
+    Getting this wrong is quiet and expensive: the 2.x substitution simply does
+    not match a 3.x cr.yaml, so the images stayed on the major the operator
+    shipped while spec.postgresVersion was changed underneath them, and every
+    instance pod sat in Init:CrashLoopBackOff.
+    """
+    with open("./deploy/cr.yaml") as f:
+        cr = f.read()
+
+    if "percona-distribution-postgresql" in cr:
+        tag = newest_distribution_pg_tag(db_ver)
+        if tag is None:
+            logger.error(
+                "No percona-distribution-postgresql image published for PG {}; "
+                "leaving the images the operator shipped with. Remove db-version= "
+                "to deploy the operator's own major.".format(db_ver))
+            return False
+        run_fatal(["sed", "-i", "-re",
+                   r"s|(percona-distribution-postgresql):[^\s]+|\1:{}|".format(tag),
+                   "./deploy/cr.yaml"], "change PG major version in images")
+        logger.info("Using percona-distribution-postgresql:{} for PG {}".format(tag, db_ver))
+        return True
+
+    run_fatal(["sed", "-i", "-re",
+               r"s/ppg[0-9.]+-(postgres-gis|postgres|pgbouncer|pgbackrest)[0-9.-]*/ppg{}-\1/".format(db_ver),
+              "./deploy/cr.yaml"], "change PG major version in images")
+    return True
+
+
 def run_pg_operator(ns, op, db_ver, cluster_name, op_ver, standby, backup_type, bucket, gcs_key, db_replicas, tls):
     if op_ver.startswith("1.") or op_ver.startswith("2.0.") or op_ver.startswith("2.1."):
         run_fatal(["sed", "-i", "-re", r"s/namespace: pgo\>/namespace: {}/".format(ns),
@@ -415,11 +477,12 @@ def run_pg_operator(ns, op, db_ver, cluster_name, op_ver, standby, backup_type, 
         run_fatal(["sed", "-i", "-re", r"s/standby: false\>/standby: true/",
                   "./deploy/cr.yaml"], "enable standby in yaml")
     if db_ver != "":
-        run_fatal(["sed", "-i", "-re",
-                   r"s/ppg[0-9.]+-(postgres-gis|postgres|pgbouncer|pgbackrest)[0-9.-]*/ppg{}-\1/".format(db_ver),
-                  "./deploy/cr.yaml"], "change PG major version in images")
-        set_yaml('.spec.postgresVersion={dbver}'.format(
-            dbver=db_ver), "change PG major version")
+        # Only move spec.postgresVersion if the images could be moved with it.
+        # The operator validates one against the other and the instance pods
+        # crashloop when they disagree.
+        if set_pg_major_in_images(db_ver):
+            set_yaml('.spec.postgresVersion={dbver}'.format(
+                dbver=db_ver), "change PG major version")
     if tls and op_ver.startswith("1"):
         set_yaml('.spec.tlsOnly=true \
         | .+opspec.sslCA="{name}-ssl-ca" \
