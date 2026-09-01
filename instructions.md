@@ -655,26 +655,104 @@ anydbver deploy \
 
 ### Coroot (monitoring)
 
-[Coroot](https://coroot.com/) is an open-source alternative to PMM. It reads
-per-database metrics with its cluster-agent and maps traffic between nodes with
-eBPF.
+[Coroot](https://coroot.com/) is an open-source alternative to PMM. Its
+cluster-agent scrapes per-database metrics, and its node-agent maps traffic
+between nodes with eBPF.
+
+Two keywords, mirroring `pmm` / `pmm-client`: `coroot` on one node for the
+server, `coroot-client:server=<node>` next to each database you want watched.
+
+#### MongoDB / PSMDB
 
 ```sh
-# Coroot + a 3-node PSMDB replica set
+# Three-node replica set
 anydbver deploy node0 coroot \
   node1 psmdb:latest,replica-set=rs0 coroot-client:server=node0 \
   node2 psmdb:latest,replica-set=rs0,master=node1 coroot-client:server=node0 \
   node3 psmdb:latest,replica-set=rs0,master=node1 coroot-client:server=node0
 
-# Coroot on a fixed UI port, monitoring one Percona Server node
+# Single node, UI on a fixed port
+anydbver deploy node0 coroot:port=9080 \
+  node1 psmdb:8.0 coroot-client:server=node0
+```
+
+You get replica set roles (`mongo_rs_status`), oplog window, connection
+counts, op latencies and WiredTiger cache metrics.
+
+#### PostgreSQL / Percona PG
+
+```sh
+# Primary and replica
+anydbver deploy node0 coroot:port=9080 \
+  node1 ppg:17 coroot-client:server=node0 \
+  node2 ppg:17,master=node1 coroot-client:server=node0
+
+# Vanilla PostgreSQL
+anydbver deploy node0 coroot \
+  node1 pg:16 coroot-client:server=node0
+```
+
+On PostgreSQL, `coroot-client` also enables `pg_stat_statements`, so you get
+per-query statistics (`pg_top_query_calls_per_second` and friends) on top of
+replication, bloat, checkpoint and WAL metrics.
+
+#### MySQL / Percona Server / PXC / MariaDB
+
+```sh
+# Percona Server
 anydbver deploy node0 coroot:port=9080 \
   node1 ps:latest coroot-client:server=node0
 
-# Coroot watching a Postgres primary and its replica
+# Three-node PXC cluster, every node monitored
 anydbver deploy node0 coroot \
-  node1 ppg:17 coroot-client:server=node0 \
-  node2 ppg:17,master=node1 coroot-client:server=node0
+  node1 pxc:8.0 coroot-client:server=node0 \
+  node2 pxc:8.0,master=node1 coroot-client:server=node0 \
+  node3 pxc:8.0,master=node1 coroot-client:server=node0
 ```
+
+#### Valkey / Redis
+
+```sh
+anydbver deploy node0 coroot \
+  node1 valkey:latest,docker-image coroot-client:server=node0
+```
+
+#### Databases from plain docker images
+
+`coroot-client` works next to a `docker-image` database too:
+
+```sh
+anydbver deploy node0 coroot:port=9080 \
+  node1 mysql:latest,docker-image coroot-client:server=node0 \
+  node2 postgresql:16,docker-image coroot-client:server=node0
+```
+
+#### Several databases at once, and next to PMM
+
+```sh
+# One coroot watching three different engines
+anydbver deploy node0 coroot:port=9080 \
+  node1 ppg:17 coroot-client:server=node0 \
+  node2 ps:latest coroot-client:server=node0 \
+  node3 valkey:latest,docker-image coroot-client:server=node0
+
+# PMM and coroot side by side on the same database, to compare them
+anydbver deploy node0 pmm:3.7.0,docker-image,port=12443 \
+  node1 coroot:port=9080 \
+  node2 ps:latest pmm-client:3.7.0-7,server=node0:8443 coroot-client:server=node1
+```
+
+#### Adding a database to a running coroot
+
+`--keep` reuses what is already there, so you do not rebuild the environment:
+
+```sh
+anydbver deploy --keep node0 coroot:port=9080 \
+  node1 ppg:17 coroot-client:server=node0 \
+  node2 valkey:latest,docker-image coroot-client:server=node0
+```
+
+#### Notes
 
 - `coroot` selects docker-image mode on its own, you do not write
   `docker-image`. It brings up five containers: the UI, Prometheus,
@@ -684,16 +762,22 @@ anydbver deploy node0 coroot \
   deploy prints the URL. Log in with `admin` / `admin`.
 - `coroot-client` installs nothing on the database node. It reads the type
   and credentials from the database keyword next to it and registers that
-  node with the coroot server over the API. Override with `user=`,
-  `password=` or `port=` when the database is not using anydbver defaults.
-- Databases coroot can scrape: PSMDB / MongoDB, PostgreSQL / Percona PG,
-  Percona Server / MySQL / MariaDB / PXC, and Valkey / Redis.
-- On PostgreSQL, `coroot-client` also sets up `pg_stat_statements` so you get
-  per-query statistics, the same way anydbver already does it for PMM. It
-  appends to whatever is already preloaded (`repmgr`, `pg_stat_monitor`)
-  rather than replacing it, restarts the server once, and skips standbys.
-  Nodes deployed from a plain docker image have no systemd, so this step is
-  skipped there and the query views stay empty.
+  node with the coroot server over the API, after the playbook has finished.
+  Override with `user=`, `password=` or `port=` when the database is not
+  using anydbver defaults:
+
+  ```sh
+  anydbver deploy node0 coroot \
+    node1 ps:latest coroot-client:server=node0,user=monitor,password=secret
+  ```
+
+- Registration takes a minute or two after the databases are up: coroot has
+  to see the container before anything can be configured on it. The deploy
+  prints what it is waiting for.
+- The `pg_stat_statements` setup appends to whatever is already preloaded
+  (`repmgr`, `pg_stat_monitor`) rather than replacing it, restarts the server
+  once, and skips standbys. A PostgreSQL node from a plain docker image has
+  no systemd, so it is skipped there and the query views stay empty.
 
 **Docker Desktop and WSL2 limitation.** The coroot node-agent only tracks
 containers and processes that already existed when it started, so anydbver

@@ -225,6 +225,70 @@ anydbver deploy \
 
 After deploy, open `https://localhost:12443` in your browser. Default login: `admin` / `verysecretpassword1^`.
 
+## Coroot (monitoring, open-source PMM alternative)
+
+Two keywords mirroring `pmm` / `pmm-client`. `coroot` picks docker-image mode
+by itself — do **not** write `,docker-image`. `coroot-client` installs nothing
+on the database node, it registers that node with the coroot server over the
+API after the playbook.
+
+```sh
+# MongoDB replica set
+anydbver deploy node0 coroot \
+  node1 psmdb:latest,replica-set=rs0                 coroot-client:server=node0 \
+  node2 psmdb:latest,replica-set=rs0,master=node1    coroot-client:server=node0 \
+  node3 psmdb:latest,replica-set=rs0,master=node1    coroot-client:server=node0
+
+# PostgreSQL primary + replica, UI on a fixed port
+anydbver deploy node0 coroot:port=9080 \
+  node1 ppg:17               coroot-client:server=node0 \
+  node2 ppg:17,master=node1  coroot-client:server=node0
+
+# Percona Server
+anydbver deploy node0 coroot:port=9080 \
+  node1 ps:latest coroot-client:server=node0
+
+# PXC cluster
+anydbver deploy node0 coroot \
+  node1 pxc:8.0              coroot-client:server=node0 \
+  node2 pxc:8.0,master=node1 coroot-client:server=node0 \
+  node3 pxc:8.0,master=node1 coroot-client:server=node0
+
+# Valkey, and databases from plain docker images
+anydbver deploy node0 coroot:port=9080 \
+  node1 valkey:latest,docker-image     coroot-client:server=node0 \
+  node2 mysql:latest,docker-image      coroot-client:server=node0 \
+  node3 postgresql:16,docker-image     coroot-client:server=node0
+
+# PMM and coroot on the same database, to compare them
+anydbver deploy node0 pmm:3.7.0,docker-image,port=12443 \
+  node1 coroot:port=9080 \
+  node2 ps:latest pmm-client:3.7.0-7,server=node0:8443 coroot-client:server=node1
+
+# Add a database to a coroot that is already running
+anydbver deploy --keep node0 coroot:port=9080 \
+  node1 ppg:17                     coroot-client:server=node0 \
+  node2 valkey:latest,docker-image coroot-client:server=node0
+```
+
+Open the printed URL. Login: `admin` / `admin`.
+
+Scrapable types: PSMDB/MongoDB, PostgreSQL/Percona PG, Percona Server/MySQL/
+MariaDB/PXC, Valkey/Redis. Credentials come from the database keyword next to
+`coroot-client`; override with `user=`, `password=`, `port=`.
+
+Verification:
+
+```sh
+# what coroot is scraping
+anydbver exec node0-cluster-agent -- true  # (sidecar, use docker logs instead)
+docker logs <ns>-<user>-node0-cluster-agent | grep "metrics collection completed"
+
+# the metrics themselves
+docker exec <ns>-<user>-node0-prometheus wget -qO- \
+  'http://localhost:9090/api/v1/query?query=mongo_rs_status'
+```
+
 ## Kubernetes operators on K3D
 
 ```sh

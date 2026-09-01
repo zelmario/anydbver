@@ -63,6 +63,7 @@ anydbver deploy percona-server:8.0
 anydbver deploy percona-server
 anydbver deploy ps
 anydbver deploy minio:docker-image node1 pg pgbackrest:s3=node0
+anydbver deploy node0 coroot:port=9080 node1 psmdb:latest,replica-set=rs0 coroot-client:server=node0 node2 psmdb:latest,replica-set=rs0,master=node1 coroot-client:server=node0
 ```
 
 There is a current list of all keywords:
@@ -96,6 +97,8 @@ nfs-client                       Mounts an NFS share from an nfs-server node
 nfs-server                       Installs an NFS server and exports a share to other nodes
 pgbackrest                       Installs pgbackrest
 pgbouncer                        Installs pgbouncer, Postgresql connection pooler
+coroot-client                    Registers a database with a Coroot server so it is monitored
+coroot-server                    Installs Coroot, an open-source observability server (alias: coroot)
 pmm-client                       Installs Percona Monitoring and Management client
 postgresql                       Installs Postgresql from PGDG packages
 repmgr                           Installs repmgr, Postgresql replication management solution

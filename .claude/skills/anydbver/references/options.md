@@ -100,6 +100,8 @@ Inherits all MySQL options above. Cluster-specific:
 - PMM **3.x** internal port is **8443** → `server=node0:8443`.
 - The host-side `port=12443` is **not** what the client uses — clients reach the server on the Docker network using its internal port.
 - `pmm-client:3.7.0` (no `-7` suffix) **will not resolve.**
+- `coroot-client` takes no version. Its options are `server=<node>` (required) plus optional `user=`, `password=`, `port=` to override the database credentials it picks up from the keyword next to it.
+- `coroot` takes `port=` for the host-side UI port and `version=` for the image tag (default `latest`). Do not add `,docker-image`, it is implied.
 
 ## Object storage (MinIO)
 

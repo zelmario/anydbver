@@ -45,6 +45,8 @@
 |----------------------|---------|-----------------------------------------|
 | `pmm-server`         | `pmm`   | Percona Monitoring and Management server |
 | `pmm-client`         |         | Percona Monitoring and Management agent |
+| `coroot-server`      | `coroot` | Coroot observability server (open-source PMM alternative) |
+| `coroot-client`      | `coroot-agent` | Registers a database with a Coroot server; installs nothing on the node |
 | `k8s-pmm`            |         | PMM running inside Kubernetes           |
 
 ## Object storage
