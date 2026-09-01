@@ -13,7 +13,11 @@
     content: |
       [mariadb]
       name = MariaDB
-      baseurl = http://yum.mariadb.org/{{ package_info['version'] | regex_replace('^([0-9]+)\.([0-9]+)\..*$', '\1.\2') }}/{{ 'centos' if dist == 'el7' else 'rhel' }}{{ ansible_distribution_version  | regex_replace('^([0-9]+)\..*$', '\1') }}-amd64
+      # archive.mariadb.org carries every release for ever, including the
+      # current one. yum.mariadb.org only keeps maintained series, so an EOL
+      # version failed with "Cannot download repomd.xml" even though the
+      # packages were addressed by full URL: dnf still refreshes every repo.
+      baseurl = https://archive.mariadb.org/mariadb-{{ package_info['version'] | regex_replace('-.*$', '') }}/yum/{{ 'centos' if dist == 'el7' else 'rhel' }}{{ ansible_distribution_version | regex_replace('^([0-9]+)\..*$', '\1') }}-{{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}
       gpgkey=https://yum.mariadb.org/RPM-GPG-KEY-MariaDB
       gpgcheck=1
       module_hotfixes=1

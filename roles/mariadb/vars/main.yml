@@ -10,7 +10,7 @@
 # https://archive.mariadb.org/mariadb-10.3.26/yum/centos7-amd64/rpms/galera-25.3.31-1.el7.centos.x86_64.rpm
 # incorrect: https://archive.mariadb.org/mariadb-10.3.26/yum/centos7-amd64/rpms/galera-25.3.31-1.rhel7.el7.centos.x86_64.rpm
 
-package_info_sql: "select * from mariadb_version where version like '{{ mariadb_version }}%' and os='{{ dist }}' ORDER BY CAST(SUBSTR(version,1,INSTR(version,'.')-1) as integer) DESC, CAST(SUBSTR(version,INSTR(version,'.')+1, INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')-1 ) AS INTEGER) DESC, CAST( SUBSTR(version, INSTR(version,'.')+1+ INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')  ) AS INTEGER) DESC LIMIT 1"
+package_info_sql: "select * from mariadb_version where version like '{{ mariadb_version }}%' and os='{{ dist }}' and arch='{{ ansible_architecture }}' ORDER BY CAST(SUBSTR(version,1,INSTR(version,'.')-1) as integer) DESC, CAST(SUBSTR(version,INSTR(version,'.')+1, INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')-1 ) AS INTEGER) DESC, CAST( SUBSTR(version, INSTR(version,'.')+1+ INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')  ) AS INTEGER) DESC LIMIT 1"
 package_info: >
   {{ lookup("theredgreek.sqlite.sqlite", path=playbook_dir+"/anydbver_version.db",
     select=package_info_sql)
