@@ -499,6 +499,8 @@ func deleteNamespace(logger *log.Logger, provider string, namespace string) {
 			delete_args := []string{"docker", "rm", "-f", "-v"}
 			delete_args = append(delete_args, containers_list...)
 			runtools.RunFatal(logger, delete_args, errMsg, ignoreMsg, true, env)
+
+			removeStubbornContainers(logger, net)
 		}
 		delete_args := []string{"docker", "network", "rm", net}
 		runtools.RunFatal(logger, delete_args, errMsg, ignoreMsg, true, env)
@@ -508,6 +510,44 @@ func deleteNamespace(logger *log.Logger, provider string, namespace string) {
 		os.Remove(chaosStatePath(logger, namespace))
 
 	}
+}
+
+// removeStubbornContainers picks up whatever survived the bulk removal.
+//
+// "docker rm -f" kills a container outright, and under Docker Desktop that can
+// leave a privileged --pid host container, the coroot node-agent being the one
+// anydbver runs, as an unkillable zombie:
+//
+//	could not kill container: PID ... is zombie and can not be killed
+//
+// docker rm removes everything else and fails only on that one, so the
+// namespace is left half-torn-down with its network still in use. A plain
+// "docker stop" lets the process exit on its own, after which the removal
+// works. Doing this only for the leftovers keeps the normal path as fast as it
+// was.
+func removeStubbornContainers(logger *log.Logger, net string) {
+	env := map[string]string{}
+	ignoreMsg := regexp.MustCompile("not found|No such|is not running|already in progress")
+
+	left, err := runtools.RunGetOutput(logger,
+		[]string{"docker", "ps", "-a", "--filter", "network=" + net, "--format", "{{.ID}}"},
+		"Error listing remaining containers", ignoreMsg, false, env, runtools.COMMAND_TIMEOUT)
+	if err != nil {
+		return
+	}
+	remaining := slices.DeleteFunc(strings.Split(strings.TrimSpace(left), "\n"), func(e string) bool {
+		return e == ""
+	})
+	if len(remaining) == 0 {
+		return
+	}
+
+	logger.Printf("%d container(s) survived removal, stopping them first", len(remaining))
+	stop_args := append([]string{"docker", "stop", "-t", "10"}, remaining...)
+	runtools.RunFatal(logger, stop_args, "Error stopping remaining containers", ignoreMsg, false, env)
+
+	rm_args := append([]string{"docker", "rm", "-f", "-v"}, remaining...)
+	runtools.RunFatal(logger, rm_args, "Error removing remaining containers", ignoreMsg, false, env)
 }
 
 func ConvertStringToMap(input string) map[string]string {
