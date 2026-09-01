@@ -2708,7 +2708,10 @@ func main() {
 	}
 
 	createCmd.Flags().StringP("os", "o", "", "Operating system of the container")
-	createCmd.Flags().StringP("expose", "p", "", "Expose port, docker -p")
+	// No "p" shorthand: the root command already uses -p for --provider, and
+	// cobra merges persistent flags into every command, so claiming it here
+	// panicked before the command could run at all.
+	createCmd.Flags().String("expose", "", "Expose port, docker -p")
 	createCmd.Flags().BoolP("privileged", "", true, "Whether the container should be privileged")
 
 	deployCmd := &cobra.Command{
