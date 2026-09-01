@@ -216,6 +216,28 @@ func corootServerURL(logger *log.Logger, namespace string, serverNode string) (s
 	return "", fmt.Errorf("coroot node %s does not publish port %s", serverNode, COROOT_UI_PORT)
 }
 
+// waitForClusterAgentScrape blocks until the cluster-agent has actually
+// collected from a database, or the timeout passes. It polls the agent's own
+// log, which reports every completed collection.
+func waitForClusterAgentScrape(logger *log.Logger, namespace string, server string, timeout time.Duration) bool {
+	agent := corootSidecar(logger, namespace, server, "cluster-agent")
+	env := map[string]string{}
+	ignoreMsg := regexp.MustCompile("ignore this")
+	deadline := time.Now().Add(timeout)
+	for {
+		out, err := runtools.RunGetOutput(logger, []string{
+			"docker", "logs", "--since", "5m", agent,
+		}, "Error reading the cluster-agent log", ignoreMsg, false, env, runtools.COMMAND_TIMEOUT)
+		if err == nil && strings.Contains(out, "metrics collection completed") {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(5 * time.Second)
+	}
+}
+
 // SetupCoroot starts the node-agent for every coroot server in the deploy and
 // registers every coroot-client database with its server.
 //
@@ -277,6 +299,21 @@ func SetupCoroot(logger *log.Logger, namespace string, servers []string, targets
 				t.Node, t.Type, base, project, url.QueryEscape(app)))
 		}
 
+		// Coroot hides an application it has seen no traffic to or from, and
+		// the node-agent records a connection only if it exists when the agent
+		// scans. At the point the node-agent was started above, the
+		// cluster-agent had not been told about these databases yet, so it was
+		// not talking to them and no link was recorded. One more restart, once
+		// it is actually scraping, is what puts the databases on the overview.
+		if len(monitored) > 0 {
+			logger.Println("Coroot: waiting for the cluster-agent to reach the databases")
+			if !waitForClusterAgentScrape(logger, namespace, server, 3*time.Minute) {
+				logger.Println("Coroot: the cluster-agent has not scraped yet, the databases may take a while to appear")
+			}
+			logger.Println("Coroot: restarting the node-agent so coroot links the databases to their clients")
+			StartCorootNodeAgent(logger, namespace, server)
+		}
+
 		fmt.Println("")
 		fmt.Println("Coroot UI:", base)
 		fmt.Printf("Username: %s\n", COROOT_ADMIN_USER)
@@ -291,8 +328,8 @@ func SetupCoroot(logger *log.Logger, namespace string, servers []string, targets
 			// traffic to or from another application. A database nothing has
 			// talked to yet is hidden there, so hand over direct links.
 			fmt.Println("")
-			fmt.Println("A database with no observed traffic yet does not appear in the")
-			fmt.Println("overview list, use the links above to open it directly.")
+			fmt.Println("They take a couple of minutes to show up in coroot's application")
+			fmt.Println("list. The links above work straight away.")
 		}
 		fmt.Println("")
 	}

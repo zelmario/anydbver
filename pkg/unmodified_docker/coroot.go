@@ -110,6 +110,9 @@ func CreateCorootContainer(logger *log.Logger, namespace string, name string, cm
 		COROOT_CLUSTER_AGENT_IMAGE,
 		"--coroot-url=http://" + anydbver_common.MakeContainerHostName(logger, namespace, name) + ":" + COROOT_UI_PORT,
 		"--metrics-scrape-interval=15s",
+		// Default is 60s. The deploy waits for the first scrape before it can
+		// finish, so a shorter poll shortens the deploy.
+		"--config-update-interval=15s",
 		"--metrics-wal-dir=/tmp",
 	}, errMsg, ignoreMsg, true, env)
 }

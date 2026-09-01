@@ -779,12 +779,13 @@ anydbver deploy --keep node0 coroot:port=9080 \
   once, and skips standbys. A PostgreSQL node from a plain docker image has
   no systemd, so it is skipped there and the query views stay empty.
 
-- **A database can be missing from coroot's overview list.** Coroot hides
-  applications it considers standalone, meaning it has seen no traffic
-  between them and any other application. A database nothing has connected
-  to yet is therefore not in the list even though it is registered and being
-  scraped. The deploy prints a direct link to each monitored database for
-  exactly this reason. This is common on Docker Desktop, see below.
+- **A database takes a couple of minutes to appear in coroot's application
+  list.** Coroot hides applications it considers standalone, meaning it has
+  seen no traffic between them and anything else, so a database only shows up
+  once coroot has linked it to the cluster-agent that scrapes it. anydbver
+  restarts the node-agent after the cluster-agent starts scraping so that link
+  gets recorded, but coroot still needs a few refresh cycles afterwards. The
+  direct links the deploy prints work immediately.
 
 **Docker Desktop and WSL2 limitation.** The coroot node-agent only tracks
 containers and processes that already existed when it started, so anydbver
@@ -794,11 +795,10 @@ metrics work. What does not work there is eBPF query capture for clients you
 start afterwards, because the agent cannot resolve their process ids. On
 native Linux Docker the agent sees them normally.
 
-That also feeds the standalone problem above: the cluster-agent connects to
-each database every 15 seconds, but those connections open after the
-node-agent started, so on Docker Desktop they are never recorded and a lone
-database stays out of the overview list. A replica set is unaffected, its
-members talk to each other from processes the agent already knows.
+This is also why the deploy restarts the node-agent twice: the first time so
+it sees the database containers, the second once the cluster-agent is
+scraping them, so that connection is in place when the agent scans and coroot
+can link the two.
 
 ### Kubernetes operators (k3d)
 
