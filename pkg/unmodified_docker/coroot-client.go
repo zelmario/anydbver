@@ -252,6 +252,7 @@ func SetupCoroot(logger *log.Logger, namespace string, servers []string, targets
 			continue
 		}
 
+		monitored := []string{}
 		for _, t := range targets {
 			if t.Server != server {
 				continue
@@ -270,12 +271,29 @@ func SetupCoroot(logger *log.Logger, namespace string, servers []string, targets
 				continue
 			}
 			logger.Printf("Coroot: %s monitoring enabled for %s", t.Type, t.Node)
+			// The colons in an application id have to be percent-encoded for the
+			// UI router, or coroot answers "invalid application id".
+			monitored = append(monitored, fmt.Sprintf("  %-6s %-8s %s/p/%s/applications/%s",
+				t.Node, t.Type, base, project, url.QueryEscape(app)))
 		}
 
 		fmt.Println("")
 		fmt.Println("Coroot UI:", base)
 		fmt.Printf("Username: %s\n", COROOT_ADMIN_USER)
 		fmt.Printf("Password: %s\n", COROOT_ADMIN_PASSWORD)
+		if len(monitored) > 0 {
+			fmt.Println("")
+			fmt.Println("Monitored databases:")
+			for _, line := range monitored {
+				fmt.Println(line)
+			}
+			// Coroot's overview page lists an application only once it has seen
+			// traffic to or from another application. A database nothing has
+			// talked to yet is hidden there, so hand over direct links.
+			fmt.Println("")
+			fmt.Println("A database with no observed traffic yet does not appear in the")
+			fmt.Println("overview list, use the links above to open it directly.")
+		}
 		fmt.Println("")
 	}
 }
