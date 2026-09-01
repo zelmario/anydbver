@@ -60,8 +60,8 @@ func newCorootApi(logger *log.Logger, base string) (*corootApi, error) {
 		logger: logger,
 	}
 	body, _ := json.Marshal(map[string]string{
-		"email":    "admin",
-		"password": anydbver_common.ANYDBVER_DEFAULT_PASSWORD,
+		"email":    COROOT_ADMIN_USER,
+		"password": COROOT_ADMIN_PASSWORD,
 	})
 	resp, err := api.client.Post(base+"/api/login", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -274,8 +274,8 @@ func SetupCoroot(logger *log.Logger, namespace string, servers []string, targets
 
 		fmt.Println("")
 		fmt.Println("Coroot UI:", base)
-		fmt.Println("Username: admin")
-		fmt.Printf("Password: %s\n", anydbver_common.ANYDBVER_DEFAULT_PASSWORD)
+		fmt.Printf("Username: %s\n", COROOT_ADMIN_USER)
+		fmt.Printf("Password: %s\n", COROOT_ADMIN_PASSWORD)
 		fmt.Println("")
 	}
 }

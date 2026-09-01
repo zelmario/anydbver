@@ -681,7 +681,7 @@ anydbver deploy node0 coroot \
   ClickHouse, a cluster-agent and a node-agent. `anydbver destroy` removes
   all of them.
 - The UI is published on a random host port unless you pass `port=`. The
-  deploy prints the URL, the user `admin` and the default password.
+  deploy prints the URL. Log in with `admin` / `admin`.
 - `coroot-client` installs nothing on the database node. It reads the type
   and credentials from the database keyword next to it and registers that
   node with the coroot server over the API. Override with `user=`,

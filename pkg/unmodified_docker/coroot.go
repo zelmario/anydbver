@@ -18,6 +18,10 @@ const (
 	COROOT_NODE_AGENT_IMAGE    = "ghcr.io/coroot/coroot-node-agent"
 	COROOT_CLUSTER_AGENT_IMAGE = "ghcr.io/coroot/coroot-cluster-agent"
 	COROOT_UI_PORT             = "8080"
+	// Coroot's UI login. Deliberately not ANYDBVER_DEFAULT_PASSWORD: this is a
+	// throwaway local UI, and "admin" matches what k8s-pmm-ha already uses.
+	COROOT_ADMIN_USER     = "admin"
+	COROOT_ADMIN_PASSWORD = "admin"
 	// Small image used only to write /etc/machine-id on the docker host.
 	COROOT_HOSTFIX_IMAGE = "alpine:3"
 )
@@ -42,6 +46,14 @@ func CreateCorootContainer(logger *log.Logger, namespace string, name string, cm
 	clickhouse := corootSidecar(logger, namespace, name, "clickhouse")
 	prometheus := corootSidecar(logger, namespace, name, "prometheus")
 	clusterAgent := corootSidecar(logger, namespace, name, "cluster-agent")
+
+	// This runs only when the coroot node itself is absent, so any sidecar
+	// still carrying one of these names is a leftover of the node being
+	// rebuilt. Without this the docker run below fails on the name.
+	runtools.RunFatal(logger, append([]string{"docker", "rm", "-f", "-v"},
+		clickhouse, prometheus, clusterAgent,
+		corootSidecar(logger, namespace, name, "node-agent")),
+		"Error removing leftover coroot sidecars", regexp.MustCompile("No such container|is not running"), false, env)
 
 	version := args["version"]
 	if version == "" {
@@ -71,7 +83,7 @@ func CreateCorootContainer(logger *log.Logger, namespace string, name string, cm
 		"--network", network,
 		"--hostname", anydbver_common.MakeContainerHostName(logger, namespace, name),
 		"-u", "root",
-		"-e", "AUTH_BOOTSTRAP_ADMIN_PASSWORD=" + anydbver_common.ANYDBVER_DEFAULT_PASSWORD,
+		"-e", "AUTH_BOOTSTRAP_ADMIN_PASSWORD=" + COROOT_ADMIN_PASSWORD,
 	}
 	if mem, ok := args["memory"]; ok {
 		cmd_args = append(cmd_args, "--memory="+mem)
