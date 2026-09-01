@@ -688,10 +688,12 @@ anydbver deploy node0 coroot \
   `password=` or `port=` when the database is not using anydbver defaults.
 - Databases coroot can scrape: PSMDB / MongoDB, PostgreSQL / Percona PG,
   Percona Server / MySQL / MariaDB / PXC, and Valkey / Redis.
-- On PostgreSQL you get every metric except per-query statistics. Those need
-  `pg_stat_statements` in `shared_preload_libraries`, which anydbver does not
-  set, and coroot logs `relation "pg_stat_statements" does not exist` until
-  you add it yourself.
+- On PostgreSQL, `coroot-client` also sets up `pg_stat_statements` so you get
+  per-query statistics, the same way anydbver already does it for PMM. It
+  appends to whatever is already preloaded (`repmgr`, `pg_stat_monitor`)
+  rather than replacing it, restarts the server once, and skips standbys.
+  Nodes deployed from a plain docker image have no systemd, so this step is
+  skipped there and the query views stay empty.
 
 **Docker Desktop and WSL2 limitation.** The coroot node-agent only tracks
 containers and processes that already existed when it started, so anydbver

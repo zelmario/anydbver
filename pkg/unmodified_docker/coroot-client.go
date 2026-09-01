@@ -262,6 +262,9 @@ func SetupCoroot(logger *log.Logger, namespace string, servers []string, targets
 				logger.Printf("Coroot: %v", err)
 				continue
 			}
+			if t.Type == "postgres" {
+				enablePgStatStatements(logger, namespace, t.Node)
+			}
 			if err := api.instrument(project, app, t); err != nil {
 				logger.Printf("Coroot: could not enable %s monitoring for %s: %v", t.Type, t.Node, err)
 				continue
@@ -284,4 +287,61 @@ func contains(items []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// pgStatStatementsScript configures pg_stat_statements on a Postgres node.
+// Postgres only exposes per-query statistics through that extension, and the
+// extension needs its library preloaded, which needs a restart. anydbver
+// already does this for PMM in tools/setup_pmm.sh; coroot needs the same, done
+// from here so the feature stays binary-only with no ansible role change.
+//
+// It preserves whatever is already preloaded (repmgr, pg_stat_monitor) instead
+// of overwriting the list, and skips standbys, where ALTER SYSTEM is pointless
+// and CREATE EXTENSION fails on a read-only server.
+const pgStatStatementsScript = `
+set -e
+command -v systemctl >/dev/null 2>&1 || { echo "coroot: no systemd, skipping pg_stat_statements"; exit 0; }
+PSQL="su - postgres -c"
+recovery=$($PSQL "psql -tAc \"select pg_is_in_recovery()\"" 2>/dev/null | tr -d ' ')
+if [ "$recovery" != "f" ]; then echo "coroot: standby, skipping pg_stat_statements"; exit 0; fi
+current=$($PSQL "psql -tAc \"show shared_preload_libraries\"" | tr -d ' ')
+case ",$current," in
+  *,pg_stat_statements,*)
+    ;;
+  *)
+    if [ -z "$current" ]; then new=pg_stat_statements; else new="$current,pg_stat_statements"; fi
+    $PSQL "psql -c \"alter system set shared_preload_libraries to '$new'\""
+    unit=$(systemctl list-units --plain --no-legend 'postgresql*' | awk '{print $1}' | head -1)
+    if [ -n "$unit" ]; then
+      systemctl restart "$unit"
+      until $PSQL "psql -tAc \"select 1\"" >/dev/null 2>&1; do sleep 1; done
+    fi
+    ;;
+esac
+$PSQL "psql -c \"create extension if not exists pg_stat_statements\"" >/dev/null
+echo "coroot: pg_stat_statements ready"
+`
+
+// enablePgStatStatements gives coroot per-query statistics on a Postgres node.
+// Best effort: a failure here costs the query views, not the rest of the
+// metrics, so it is logged and the deploy continues.
+func enablePgStatStatements(logger *log.Logger, namespace string, node string) {
+	container := anydbver_common.MakeContainerHostName(logger, namespace, node)
+	env := map[string]string{}
+	ignoreMsg := regexp.MustCompile("ignore this")
+	out, err := runtools.RunGetOutput(logger, []string{
+		"docker", "exec", container, "bash", "-c", pgStatStatementsScript,
+	}, "Could not enable pg_stat_statements", ignoreMsg, false, env, runtools.COMMAND_TIMEOUT)
+	if err != nil {
+		logger.Printf("Coroot: could not enable pg_stat_statements on %s, query statistics will be missing: %v", node, err)
+		return
+	}
+	if line := strings.TrimSpace(out); line != "" {
+		logger.Printf("Coroot: %s: %s", node, lastLine(line))
+	}
+}
+
+func lastLine(s string) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	return strings.TrimSpace(lines[len(lines)-1])
 }
