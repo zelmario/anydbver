@@ -1880,6 +1880,65 @@ func knownDeployKeywords(logger *log.Logger) map[string]bool {
 	return known
 }
 
+// validateDeployVersions rejects a version that does not exist in the version
+// database, before anything is created.
+//
+// Without this the deploy spends minutes installing base packages and then dies
+// inside a role with an error that names neither the software nor the version.
+// "ps:9.7" produced, after six and a half minutes:
+//
+//	The task includes an option with an undefined variable ...
+//	'dict object' has no attribute ''
+//
+// because the SQLite lookup returned no rows, the role fell back to
+// os[dist][soft], and `soft` is derived from version prefixes the playbook
+// knows about, so it was empty.
+func validateDeployVersions(logger *log.Logger, args []string) {
+	dbFile := anydbver_common.GetDatabasePath(logger)
+	sources, err := loadVersionSources(dbFile)
+	if err != nil {
+		return
+	}
+
+	// version_sources is keyed by the short keyword ("ps"), deploy keywords
+	// resolve to the canonical name ("percona-server"). Index by both.
+	byCmd := map[string]versionSource{}
+	for _, source := range sources {
+		byCmd[source.Keyword] = source
+		if canonical, err := ResolveAlias("keyword_aliases", dbFile, source.Keyword); err == nil {
+			byCmd[canonical] = source
+		}
+	}
+
+	for _, arg := range args {
+		keyword := ParseDeploymentKeyword(logger, arg)
+		version := keyword.Args["version"]
+		if version == "" || version == "latest" {
+			continue
+		}
+		// docker-image nodes take their version from the image tag, not the
+		// version database.
+		if _, isDockerImage := keyword.Args["docker-image"]; isDockerImage {
+			continue
+		}
+		source, ok := byCmd[keyword.Cmd]
+		if !ok {
+			continue
+		}
+		exists, err := versionExists(dbFile, source, version)
+		if err != nil || exists {
+			continue
+		}
+
+		logger.Printf("Error: %s %s is not in the version database (from %q).", source.DisplayName, version, arg)
+		if known := knownVersionsFor(dbFile, source, 8); len(known) > 0 {
+			logger.Printf("  Available: %s", strings.Join(known, ", "))
+		}
+		logger.Printf("  Run 'anydbver versions %s' for the full list, or 'anydbver update' to refresh it.", source.Keyword)
+		os.Exit(runtools.ANYDBVER_UNKNOWN_VERSION)
+	}
+}
+
 // levenshtein returns the edit distance between a and b (used to suggest the
 // closest valid keyword for a typo'd one).
 func levenshtein(a, b string) int {
@@ -2666,6 +2725,7 @@ func main() {
 			// before the implicit destroy below, so a typo can't wipe an
 			// existing environment.
 			validateDeployKeywords(logger, args)
+			validateDeployVersions(logger, args)
 
 			if !keep {
 				deleteNamespace(logger, provider, namespace)

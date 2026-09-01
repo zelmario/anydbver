@@ -448,3 +448,56 @@ func sortedKeys(m map[string]bool) []string {
 	sort.Strings(out)
 	return out
 }
+
+// versionExists reports whether a requested version prefix matches anything in
+// the source's table. Sources whose versions are fetched from the network
+// (docker_hub) are treated as existing: a deploy should not depend on a remote
+// lookup succeeding.
+func versionExists(dbFile string, s versionSource, version string) (bool, error) {
+	if s.SourceTable == "docker_hub" || !allowedVersionTables[s.SourceTable] {
+		return true, nil
+	}
+	db, err := sql.Open("sqlite", dbFile)
+	if err != nil {
+		return true, err
+	}
+	defer db.Close()
+
+	var query string
+	var qargs []interface{}
+	switch s.SourceTable {
+	case "k8s_operators_version":
+		query = `SELECT 1 FROM k8s_operators_version WHERE name = ? AND version LIKE ? LIMIT 1`
+		qargs = append(qargs, s.Program, version+"%")
+	case "general_version":
+		query = `SELECT 1 FROM general_version WHERE program = ? AND version LIKE ? LIMIT 1`
+		qargs = append(qargs, s.Program, version+"%")
+	default:
+		query = `SELECT 1 FROM ` + s.SourceTable + ` WHERE version LIKE ? LIMIT 1`
+		qargs = append(qargs, version+"%")
+	}
+
+	var found int
+	err = db.QueryRow(query, qargs...).Scan(&found)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+// knownVersionsFor returns the newest few versions of a software, for telling
+// the user what they could have asked for instead.
+func knownVersionsFor(dbFile string, s versionSource, limit int) []string {
+	rows, err := queryVersionRows(dbFile, s)
+	if err != nil {
+		return nil
+	}
+	all := distinctVersions(rows, s, "", "")
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	return all
+}
