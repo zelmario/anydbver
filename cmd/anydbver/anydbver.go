@@ -1893,6 +1893,10 @@ func knownDeployKeywords(logger *log.Logger) map[string]bool {
 // because the SQLite lookup returned no rows, the role fell back to
 // os[dist][soft], and `soft` is derived from version prefixes the playbook
 // knows about, so it was empty.
+//
+// A version that exists only for another architecture fails the same way: the
+// lookup filters on ansible_architecture, so "ps:8.4" died with that message on
+// an Apple Silicon Mac while working on x86_64. Both cases are checked here.
 func validateDeployVersions(logger *log.Logger, args []string) {
 	dbFile := anydbver_common.GetDatabasePath(logger)
 	sources, err := loadVersionSources(dbFile)
@@ -1925,16 +1929,30 @@ func validateDeployVersions(logger *log.Logger, args []string) {
 		if !ok {
 			continue
 		}
-		exists, err := versionExists(dbFile, source, version)
-		if err != nil || exists {
+		exists, forArch, err := versionAvailability(dbFile, source, version)
+		if err != nil || (exists && forArch) {
 			continue
 		}
 
-		logger.Printf("Error: %s %s is not in the version database (from %q).", source.DisplayName, version, arg)
-		if known := knownVersionsFor(dbFile, source, 8); len(known) > 0 {
-			logger.Printf("  Available: %s", strings.Join(known, ", "))
+		if exists {
+			// The version is known, just not built for this machine. Percona
+			// ships aarch64 for some series only, so an Apple Silicon Mac hits
+			// this where an x86_64 host would not.
+			arch := packageArch()
+			logger.Printf("Error: %s %s has no %s packages in the version database (from %q).", source.DisplayName, version, arch, arg)
+			if known := knownVersionsForArch(dbFile, source, arch, 8); len(known) > 0 {
+				logger.Printf("  Available for %s: %s", arch, strings.Join(known, ", "))
+			} else {
+				logger.Printf("  No %s build of %s is in the database.", arch, source.DisplayName)
+			}
+			logger.Printf("  Run 'anydbver versions %s --arch %s' for the full list, or 'anydbver update' to refresh it.", source.Keyword, arch)
+		} else {
+			logger.Printf("Error: %s %s is not in the version database (from %q).", source.DisplayName, version, arg)
+			if known := knownVersionsFor(dbFile, source, 8); len(known) > 0 {
+				logger.Printf("  Available: %s", strings.Join(known, ", "))
+			}
+			logger.Printf("  Run 'anydbver versions %s' for the full list, or 'anydbver update' to refresh it.", source.Keyword)
 		}
-		logger.Printf("  Run 'anydbver versions %s' for the full list, or 'anydbver update' to refresh it.", source.Keyword)
 		os.Exit(runtools.ANYDBVER_UNKNOWN_VERSION)
 	}
 }

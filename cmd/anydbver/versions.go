@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -449,53 +450,109 @@ func sortedKeys(m map[string]bool) []string {
 	return out
 }
 
-// versionExists reports whether a requested version prefix matches anything in
-// the source's table. Sources whose versions are fetched from the network
+// packageArch is the arch the version database uses for the machine anydbver
+// runs on. Containers share the host kernel, so an Apple Silicon Mac can only
+// install aarch64 packages.
+func packageArch() string {
+	if runtime.GOARCH == "arm64" {
+		return "aarch64"
+	}
+	return "x86_64"
+}
+
+// versionAvailability reports whether a requested version prefix matches
+// anything in the source's table, and whether it matches for this machine's
+// architecture. Sources whose versions are fetched from the network
 // (docker_hub) are treated as existing: a deploy should not depend on a remote
 // lookup succeeding.
-func versionExists(dbFile string, s versionSource, version string) (bool, error) {
+func versionAvailability(dbFile string, s versionSource, version string) (exists bool, forArch bool, err error) {
 	if s.SourceTable == "docker_hub" || !allowedVersionTables[s.SourceTable] {
-		return true, nil
+		return true, true, nil
 	}
 	db, err := sql.Open("sqlite", dbFile)
 	if err != nil {
-		return true, err
+		return true, true, err
 	}
 	defer db.Close()
 
-	var query string
+	var where string
 	var qargs []interface{}
 	switch s.SourceTable {
 	case "k8s_operators_version":
-		query = `SELECT 1 FROM k8s_operators_version WHERE name = ? AND version LIKE ? LIMIT 1`
+		where = `name = ? AND version LIKE ?`
 		qargs = append(qargs, s.Program, version+"%")
 	case "general_version":
-		query = `SELECT 1 FROM general_version WHERE program = ? AND version LIKE ? LIMIT 1`
+		where = `program = ? AND version LIKE ?`
 		qargs = append(qargs, s.Program, version+"%")
 	default:
-		query = `SELECT 1 FROM ` + s.SourceTable + ` WHERE version LIKE ? LIMIT 1`
+		where = `version LIKE ?`
 		qargs = append(qargs, version+"%")
 	}
 
 	var found int
-	err = db.QueryRow(query, qargs...).Scan(&found)
+	err = db.QueryRow(`SELECT 1 FROM `+s.SourceTable+` WHERE `+where+` LIMIT 1`, qargs...).Scan(&found)
 	if err == sql.ErrNoRows {
-		return false, nil
+		return false, false, nil
 	}
 	if err != nil {
-		return true, err
+		return true, true, err
 	}
-	return true, nil
+
+	// A table without an arch column is arch-agnostic, and so is a row that
+	// leaves the column empty.
+	if !tableHasColumn(db, s.SourceTable, "arch") {
+		return true, true, nil
+	}
+	archArgs := append(append([]interface{}{}, qargs...), packageArch())
+	err = db.QueryRow(`SELECT 1 FROM `+s.SourceTable+` WHERE `+where+
+		` AND (arch = ? OR arch = '' OR arch IS NULL) LIMIT 1`, archArgs...).Scan(&found)
+	if err == sql.ErrNoRows {
+		return true, false, nil
+	}
+	if err != nil {
+		return true, true, err
+	}
+	return true, true, nil
+}
+
+// tableHasColumn reports whether table has the named column. The table name is
+// whitelisted by allowedVersionTables before it gets here.
+func tableHasColumn(db *sql.DB, table string, column string) bool {
+	rows, err := db.Query(`PRAGMA table_info(` + table + `)`)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull int
+		var dflt interface{}
+		var pk int
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			return false
+		}
+		if name == column {
+			return true
+		}
+	}
+	return false
 }
 
 // knownVersionsFor returns the newest few versions of a software, for telling
 // the user what they could have asked for instead.
 func knownVersionsFor(dbFile string, s versionSource, limit int) []string {
+	return knownVersionsForArch(dbFile, s, "", limit)
+}
+
+// knownVersionsForArch is knownVersionsFor limited to the versions this machine
+// can actually install.
+func knownVersionsForArch(dbFile string, s versionSource, arch string, limit int) []string {
 	rows, err := queryVersionRows(dbFile, s)
 	if err != nil {
 		return nil
 	}
-	all := distinctVersions(rows, s, "", "")
+	all := distinctVersions(rows, s, "", arch)
 	if len(all) > limit {
 		all = all[:limit]
 	}
