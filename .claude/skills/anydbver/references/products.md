@@ -1,6 +1,6 @@
 # Products and aliases
 
-> Verified on 2026-08-21 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
+> Verified on 2026-09-04 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
 >
 > To discover deployable versions, prefer **`anydbver versions [software]`** (added in v0.1.37): `anydbver versions` for an overview, `anydbver versions psmdb` for the full per-major list, plus `--latest`, `--os`, `--arch`, `--all`, `--json`.
 
@@ -143,3 +143,21 @@ not 8.0; `mysql:latest` is 26.7 (MySQL switched to calendar versioning after
 line, pin it: `psmdb:8.0`, `mysql:8.4`, `mariadb:11.8`.
 
 If a deploy command says `:latest` and the user is reproducing a bug, **replace it with an explicit patch version** and confirm with `anydbver deploy help <keyword>` which patch your build's version DB has.
+
+## Architecture (Apple Silicon)
+
+Containers share the host kernel, so an arm64 Mac can only install aarch64
+packages, and the version DB carries aarch64 rows for a subset of what x86_64
+has. `ps`, `mysql`, `mariadb`, `psmdb`, `pbm`, `pg`, `ppg` and `pmm-client` all
+have aarch64 builds. **`pxc` and `pxb` (Percona XtraBackup) have none**, so any
+PXC topology or xtrabackup step is x86_64 only.
+
+Check before promising a version:
+
+```
+anydbver versions ps --arch aarch64
+```
+
+Since v0.1.42 a version that exists only for x86_64 is refused up front, naming
+the arch and listing what this machine can install. Older builds died minutes
+later inside the ansible role with `'dict object' has no attribute ''`.
