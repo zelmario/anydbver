@@ -12,7 +12,7 @@ if [ ! -f /usr/bin/mysql ] ; then
 
 mysql --force --protocol=tcp --host=127.0.0.1 --port 6032 -uadmin -padmin --prompt='Admin> ' <<EOF
 SET mysql-monitor_username='repl';
-SET mysql-monitor_password='secret';
+SET mysql-monitor_password='$MYSQL_PASSWORD';
 LOAD MYSQL VARIABLES TO RUNTIME;
 SAVE MYSQL VARIABLES TO DISK;
 

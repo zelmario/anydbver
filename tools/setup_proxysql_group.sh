@@ -8,7 +8,7 @@ if [ ! -f /usr/bin/mysql ] ; then
   yum install -y mysql
 fi
 
-if ! mysql -uroot -psecret -h 10.218.29.38 -e "show create user repl@'%'" &>/dev/null ; then
+if ! mysql -u "$MASTER_USER" --host "$MASTER_IP" --password="$MASTER_PASSWORD" -e "show create user repl@'%'" &>/dev/null ; then
   mysql --force -u "$MASTER_USER" --host "$MASTER_IP" --password="$MASTER_PASSWORD" <<EOF
 CREATE USER repl@'%' IDENTIFIED WITH mysql_native_password BY '$MASTER_PASSWORD';
 GRANT REPLICATION CLIENT ON *.* TO repl@'%';

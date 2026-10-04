@@ -87,6 +87,7 @@ Look for `Last_IO_Error` / `Last_SQL_Error`. Common: GTID set divergence, missin
 ### ProxySQL not routing
 - Verify mysql_servers / mysql_users are populated: `anydbver exec node2 -- mysql -h127.0.0.1 -P6032 -uadmin -padmin -e 'select * from mysql_servers'`
 - ProxySQL container needs to know about backends — for `percona-proxysql:latest,master=node0`, the `master=` populates the source.
+- Monitor user is `repl` with password = `ANYDBVER_DEFAULT_PASSWORD` (`verysecretpassword1^`). Check: `anydbver exec <proxysql-node> -- mysql -h127.0.0.1 -P6032 -uadmin -padmin -e "select * from global_variables where variable_name like 'mysql-monitor%'"` — if `mysql-monitor_password` is `secret`, redeploy (cluster join used to overwrite it).
 
 ### MySQL Router can't reach the cluster
 GR cluster must be initialized **first** before MySQL Router bootstraps against it. Re-deploy with the GR options on node0/node1, then `mysql-router` on node2 (which is the documented order).
