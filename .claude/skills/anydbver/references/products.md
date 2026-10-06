@@ -16,7 +16,10 @@
 | `postgresql`              | `pg`, `postgres`              | PostgreSQL from PGDG                      |
 | `percona-postgresql`      | `ppg`, `percona-postgres`     | Percona Distribution for PostgreSQL       |
 | `percona-server-mongodb`  | `psmdb`                       | Percona Server for MongoDB                |
+| `mongodb`                 | `mongodb-community`           | MongoDB Community (repo.mongodb.org)      |
 | `valkey`                  |                               | Valkey (Redis fork)                       |
+
+**`mongodb` takes the same options as `psmdb`** (`replica-set=`, `master=`, `role=shard|cfg`, `mongos-cfg:`/`mongos-shard:`, `user=`, `password=`, `docker-image`), installs from MongoDB's own yum repo on EL 8/9/10, x86_64 and aarch64, and covers 5.0 to 9.0, including 8.2 and 9.0 which Percona does not ship. Use it to compare the same version on Community and PSMDB (`psmdb:8.0.32` vs `mongodb:8.0.32`). LDAP and Kerberos are Enterprise features in MongoDB, so `ldap-server=`/`kerberos-server=` stay PSMDB-only. `mongodb:<ver>,docker-image` runs the official `mongo` image.
 
 ## Replication / HA / proxies
 
@@ -134,6 +137,7 @@ These were the latest defaults on 2026-10-06. They shift between releases as the
 | `pg`            | 18.x          |
 | `ppg`           | 18.x          |
 | `psmdb`         | 8.3.x         |
+| `mongodb`       | 8.0.x (the keyword default; `latest` falls back to it, pin `mongodb:9.0` for 9.0) |
 | `pmm`           | 3.x           |
 | `pmm-client`    | `3.x.y-1` (bare `3.x.y` won't resolve) |
 

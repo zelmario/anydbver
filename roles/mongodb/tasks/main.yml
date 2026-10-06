@@ -9,14 +9,13 @@
 - name: Enable MongoDB Community repository
   when: mongo_org_version != ''
   copy:
-    dest: "/etc/yum.repos.d/mongodb-org-{{pkg_major}}.repo"
+    dest: "{{ package_info['repo_file'] }}"
     content: |
-      [mongodb-org-{{pkg_major}}]
+      [mongodb-org]
       name=MongoDB Repository
-      baseurl=https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/{{pkg_major}}/{{ansible_architecture}}/
+      baseurl={{ package_info['repo_url'] }}
       gpgcheck=0
       enabled=1
-      gpgkey=https://www.mongodb.org/static/pgp/server-{{pkg_major}}.asc
 
 - name: Enable local repo.* caching
   include_tasks: common/tasks/repo_cache.yaml
@@ -50,8 +49,8 @@
 
 - name: install MongoDB Community
   when: mongo_org_version != ''
-  yum:
-    name: "{{pkg[dist].install_packages}}"
+  package:
+    name: "{{ package_info['packages'].split('|') }}"
     state: present
 
 

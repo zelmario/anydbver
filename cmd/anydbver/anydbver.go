@@ -1169,7 +1169,7 @@ func ParseDeploymentKeyword(logger *log.Logger, keyword string) DeploymentKeywor
 }
 
 func handleDBPreReq(logger *log.Logger, namespace string, name string, cmd string, args map[string]string) {
-	if cmd == "percona-server-mongodb" {
+	if cmd == "percona-server-mongodb" || cmd == "mongodb" {
 		unmodified_docker.SetupMongoKeyFiles(logger, namespace, anydbver_common.MakeContainerHostName(logger, namespace, name), args)
 	} else if cmd == "percona-xtradb-cluster" {
 	}

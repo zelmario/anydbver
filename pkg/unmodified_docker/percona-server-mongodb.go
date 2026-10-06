@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strings"
 )
 
 func GenerateRandomAndEncodeBase64() (string, error) {
@@ -61,12 +62,18 @@ func SetupMongoKeyFiles(logger *log.Logger, namespace string, hostname string, a
 
 	if replSet, ok := args["replica-set"]; ok {
 		GenerateMonoDBKeyFile(logger, args["cluster"])
+		// mongod must own the keyfile: uid 1001 in the Percona image, 999 in
+		// the official "mongo" image.
+		keyOwner := "1001"
+		if args["docker-image"] != "" && !strings.Contains(args["docker-image"], "percona") {
+			keyOwner = "999"
+		}
 
 		mongo_args = append(
 			mongo_args,
 			"--replSet", replSet, "--keyFile", fmt.Sprintf("/vagrant/secret/%s-keyfile-docker", replSet),
 			"--bind_ip", "localhost,"+hostname)
-		create_repl_set_key_cmd := fmt.Sprintf("cp /vagrant/secret/%s-keyfile /vagrant/secret/%s-keyfile;cp /vagrant/secret/%s-keyfile /vagrant/secret/%s-keyfile-docker;chown 1001 /vagrant/secret/%s-keyfile-docker;chmod 0600 /vagrant/secret/%s-keyfile-docker", args["cluster"], replSet, args["cluster"], replSet, replSet, replSet)
+		create_repl_set_key_cmd := fmt.Sprintf("cp /vagrant/secret/%s-keyfile /vagrant/secret/%s-keyfile;cp /vagrant/secret/%s-keyfile /vagrant/secret/%s-keyfile-docker;chown %s /vagrant/secret/%s-keyfile-docker;chmod 0600 /vagrant/secret/%s-keyfile-docker", args["cluster"], replSet, args["cluster"], replSet, keyOwner, replSet, replSet)
 		volumes := []string{"-v", filepath.Dir(anydbver_common.GetConfigPath(logger)) + "/secret:/vagrant/secret"}
 		anydbver_common.RunCommandInBaseContainer(logger, namespace, create_repl_set_key_cmd, volumes, "Can't copy mongodb keyfile", false)
 	}
@@ -119,7 +126,10 @@ func SetupPerconaServerMongoDBContainer(logger *log.Logger, namespace string, na
 			mongo_uri := fmt.Sprintf("mongodb://admin:%s@%s:27017/admin", encoded_pass, master_host)
 			script_js := fmt.Sprintf(`rs.add({ host:"%s"})`, hostname)
 
-			mongo_cmd := fmt.Sprintf("mongosh '%s' --eval '%s'", mongo_uri, script_js)
+			// rs.add needs the new member reachable, wait for it first.
+			new_member_uri := fmt.Sprintf("mongodb://admin:%s@%s:27017/admin", encoded_pass, hostname)
+			mongo_wait_ready_cmd := fmt.Sprintf(`until mongosh %s --eval 'print("waited for connection")' >/dev/null 2>&1 ; do sleep 2 ; done`, new_member_uri)
+			mongo_cmd := fmt.Sprintf("%s;mongosh '%s' --eval '%s'", mongo_wait_ready_cmd, mongo_uri, script_js)
 
 			runtools.ExecCommandInContainer(logger, master_host, mongo_cmd, "Can't add replica to set")
 
@@ -130,7 +140,7 @@ func SetupPerconaServerMongoDBContainer(logger *log.Logger, namespace string, na
 				`rs.initiate( { _id : "%s", configsvr: false, members: [ { _id: 0, host: "%s:27017" }, ] })`,
 				replSet, master_host)
 
-			mongo_wait_ready_cmd := fmt.Sprintf(`until mongosh %s --eval 'print("waited for connection")' &>/dev/null ; do sleep 2 ; done`, mongo_uri)
+			mongo_wait_ready_cmd := fmt.Sprintf(`until mongosh %s --eval 'print("waited for connection")' >/dev/null 2>&1 ; do sleep 2 ; done`, mongo_uri)
 			mongo_cmd := fmt.Sprintf("%s;mongosh '%s' --eval '%s'", mongo_wait_ready_cmd, mongo_uri, script_js)
 			runtools.ExecCommandInContainer(logger, master_host, mongo_cmd, "Can't init replica set")
 		}

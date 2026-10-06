@@ -61,6 +61,9 @@ package_info: >
   {{ lookup("theredgreek.sqlite.sqlite", path=playbook_dir+"/anydbver_version.db",
     select="select * from percona_server_mongodb_version where version like '"+ psmdb_version +"%' and os='"+ dist  +"' and arch='"+ansible_architecture+"' ORDER BY CAST(SUBSTR(version,1,INSTR(version,'.')-1) as integer) DESC, CAST(SUBSTR(version,INSTR(version,'.')+1, INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')-1 ) AS INTEGER) DESC, CAST( SUBSTR(version, INSTR(version,'.')+1+ INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')  ) AS INTEGER) DESC LIMIT 1")
   if psmdb_version != ""
+  else lookup("theredgreek.sqlite.sqlite", path=playbook_dir+"/anydbver_version.db",
+    select="select * from mongodb_version where version like '"+ mongo_org_version +"%' and os='"+ dist  +"' and arch='"+ansible_architecture+"' ORDER BY CAST(SUBSTR(version,1,INSTR(version,'.')-1) as integer) DESC, CAST(SUBSTR(version,INSTR(version,'.')+1, INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')-1 ) AS INTEGER) DESC, CAST( SUBSTR(version, INSTR(version,'.')+1+ INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')  ) AS INTEGER) DESC LIMIT 1")
+  if mongo_org_version != ""
   else "" }}
 
 
