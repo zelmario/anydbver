@@ -663,6 +663,9 @@ el8:
       - "postgresql{{postgresql_version|regex_replace('^([0-9]+)\\..*$','\\1')}}-server-{{postgresql_version}}PGDG.rhel8.x86_64"
       - "postgresql{{postgresql_version|regex_replace('^([0-9]+)\\..*$','\\1')}}-contrib-{{postgresql_version}}PGDG.rhel8.x86_64"
 el9:
+  mariadb_server:
+    systemd_service: "mariadb"
+    cnf_file: '/etc/my.cnf.d/zz_mysqld.cnf'
   mysql_router:
     repo_url: http://repo.mysql.com/mysql80-community-release-el9-1.noarch.rpm
     systemd_service: "mysqlrouter"
