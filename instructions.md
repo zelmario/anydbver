@@ -168,6 +168,7 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `postgresql`              | `pg`, `postgres`             | PostgreSQL from PGDG                      |
 | `percona-postgresql`      | `ppg`, `percona-postgres`    | Percona Distribution for PostgreSQL       |
 | `percona-server-mongodb`  | `psmdb`                      | Percona Server for MongoDB                |
+| `mongodb`                 | `mongodb-community`          | MongoDB Community 5.0 to 9.0 (same options as `psmdb`) |
 | `valkey`                  |                              | Valkey (Redis fork)                       |
 
 ### Replication / HA / proxies

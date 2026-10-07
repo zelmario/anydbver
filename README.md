@@ -77,6 +77,7 @@ haproxy-pg                       Installs haproxy and configures it to be used w
 ldap                             Installs openldap server
 ldap-master                      Allows to specify where is ldap server on the client node
 mariadb                          Installs Mariadb
+mongodb                          Installs MongoDB Community, 5.0 to 9.0 (same options as percona-server-mongodb)
 mongos-cfg                       Allows to specify which nodes are MongoDB config servers
 mongos-shard                     Allows to specify replica sets and config servers for MongoDB clusters
 mysql                            Installs Oracle MySQL Community version
