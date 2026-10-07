@@ -1,6 +1,6 @@
 # Products and aliases
 
-> Verified on 2026-10-06 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
+> Verified on 2026-10-07 against `anydbver_version.sql` and `anydbver deploy help keywords`. Run that command for the live, authoritative list.
 >
 > To discover deployable versions, prefer **`anydbver versions [software]`** (added in v0.1.37): `anydbver versions` for an overview, `anydbver versions psmdb` for the full per-major list, plus `--latest`, `--os`, `--arch`, `--all`, `--json`.
 
@@ -126,26 +126,27 @@ anydbver --version                 # binary version
 
 ## Default versions (snapshot, will rot)
 
-These were the latest defaults on 2026-10-06. They shift between releases as the version DB updates — **always pin** when reproducing a bug.
+`:latest` (or a bare keyword) does **not** pick the newest version in the DB. It
+drops the version and falls back to the keyword's default in `ansible_arguments`,
+then installs the newest patch matching that prefix. Defaults on 2026-10-07:
 
-| Product | `latest` resolves to (approx.) |
-|---------|-------------------------------|
-| `ps`            | 9.7.x         |
-| `mysql`         | 26.7.x        |
-| `mariadb`       | 13.1.x        |
-| `pxc`           | 9.7.x         |
+| Product | `latest` resolves to |
+|---------|----------------------|
+| `ps`            | 8.4.x         |
+| `mysql`         | 8.0.x         |
+| `mariadb`       | 11.4.2 (exact) |
+| `pxc`           | 8.4.x         |
 | `pg`            | 18.x          |
-| `ppg`           | 18.x          |
-| `psmdb`         | 8.3.x         |
-| `mongodb`       | 8.0.x (the keyword default; `latest` falls back to it, pin `mongodb:9.0` for 9.0) |
-| `pmm`           | 3.x           |
-| `pmm-client`    | `3.x.y-1` (bare `3.x.y` won't resolve) |
+| `ppg`           | 16.x          |
+| `psmdb`         | 8.0.x         |
+| `mongodb`       | 8.0.x         |
+| `pbm`           | 2.7.0         |
+| `pmm-client`    | 2.x (pin `pmm-client:3.x.y-1` for PMM 3; bare `3.x.y` won't resolve) |
 
-**Several of these sit on a newer series than people expect.** `psmdb:latest` is
-8.3, not 8.0; `mysql:latest` is 26.7 (MySQL switched to calendar versioning after
-9.7); `ps:latest` and `pxc:latest` are 9.7; `mariadb:latest` is 13.1, not 11.8.
-If someone wants the previous LTS line, pin it: `psmdb:8.0`, `mysql:8.4`,
-`ps:8.4`, `pxc:8.4`, `mariadb:11.8`.
+**Newer series exist but are never reached through `latest`.** Pin them:
+`psmdb:8.3`, `mysql:26.7`, `ps:9.7`, `pxc:9.7`, `mariadb:13.1`, `ppg:18`,
+`mongodb:9.0`. `anydbver versions <software> --latest` lists the newest patch per
+series, which is a different thing from what `:latest` deploys.
 
 If a deploy command says `:latest` and the user is reproducing a bug, **replace it with an explicit patch version** and confirm with `anydbver deploy help <keyword>` which patch your build's version DB has.
 
