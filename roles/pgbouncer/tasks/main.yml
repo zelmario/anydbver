@@ -7,6 +7,14 @@
     state: present
     disable_gpg_check: yes
 
+# Older dnf has no $releasever_major/$releasever_minor, see roles/postgresql
+- name: Use major-version PGDG repo paths
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux'
+  ansible.builtin.replace:
+    path: /etc/yum.repos.d/pgdg-redhat-all.repo
+    regexp: '\$releasever_major\.\$releasever_minor'
+    replace: '$releasever'
+
 - name: Install PgBouncer
   package:
     name:

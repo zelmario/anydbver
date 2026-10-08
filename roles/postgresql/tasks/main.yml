@@ -49,6 +49,17 @@
     regexp: '^(repo_gpgcheck|gpgcheck)\s*=\s*1\s*$'
     replace: '\1 = 0'
 
+# The PGDG repo RPM now builds baseurls from $releasever_major.$releasever_minor
+# (rhel-9.6-x86_64, ...). Older dnf (Rocky 9.3 base image) does not define those
+# variables, and PGDG only publishes current minors anyway, so metadata fails.
+# The major-only paths (rhel-9-x86_64) exist for every version, use them.
+- name: Use major-version PGDG repo paths
+  when: postgresql_version != '' and (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
+  ansible.builtin.replace:
+    path: /etc/yum.repos.d/pgdg-redhat-all.repo
+    regexp: '\$releasever_major\.\$releasever_minor'
+    replace: '$releasever'
+
 - name: Add PGDG 9.5 repo
   when: postgresql_version.startswith('9.5') and (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
   blockinfile:
