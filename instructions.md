@@ -380,7 +380,6 @@ the ones you will use most often.
 | Option                  | Meaning                                            |
 |-------------------------|----------------------------------------------------|
 | `nodes=3`               | Number of k3d nodes                                |
-| `cluster-domain=...`    | DNS domain for the cluster                         |
 | `ingress=443`           | Ingress host port                                  |
 | `ingress-type=nginxinc` | Ingress controller flavor                          |
 | `host-alias="IP:h1\|h2"`| Extra /etc/hosts entries                           |
@@ -822,7 +821,7 @@ anydbver deploy k3d k8s-minio:latest,certs=self-signed cert-manager \
   k8s-pg:2.7.0,namespace=pgo1,standby
 
 # PG operator installed via Helm
-anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local \
+anydbver deploy k3d:v1.25.16-k3s4 \
   cert-manager:1.14.2 \
   k8s-pg:2.7.0,cluster-name=db1,helm
 
@@ -855,7 +854,7 @@ anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,expose,s3=https://KEY:SECRET@s3
 
 # PSMDB operator 1.20 with custom cluster domain
 anydbver deploy \
-  k3d:v1.25.16-k3s4,cluster-domain=percona.local \
+  k3d:v1.25.16-k3s4 \
   cert-manager:1.14.2 \
   k8s-psmdb:1.20.1,replicas=1,shards=0,namespace=db1
 

@@ -338,7 +338,7 @@ anydbver deploy k3d k8s-crunchy:5.8.8,replicas=1,expose,s3=https://KEY:SECRET@s3
 ```sh
 # Single PSMDB CR
 anydbver deploy \
-  k3d:v1.25.16-k3s4,cluster-domain=percona.local \
+  k3d:v1.25.16-k3s4 \
   cert-manager:1.14.2 \
   k8s-psmdb:1.20.1,replicas=1,shards=0,namespace=db1
 
@@ -355,7 +355,7 @@ anydbver deploy \
 
 Append `helm` to the operator option:
 ```sh
-anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local \
+anydbver deploy k3d:v1.25.16-k3s4 \
   cert-manager:1.14.2 \
   k8s-pg:2.7.0,cluster-name=db1,helm
 ```

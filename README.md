@@ -138,7 +138,7 @@ shards
 version
 
 anydbver deploy k3d:latest,ingress=443,ingress-type=nginxinc,nodes=3,host-alias="172.17.0.1:r1.percona.local|r2.percona.local|r3.percona.local" cert-manager k8s-psmdb:1.16.2,replicas=1,shards=0,namespace=db1 k8s-psmdb:1.16.2,replicas=1,shards=0,namespace=db2 k8s-psmdb:1.16.2,replicas=1,shards=0,namespace=db3
-anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local cert-manager:1.14.2 k8s-mongo:1.14.0,cluster-name=db1
+anydbver deploy k3d:v1.25.16-k3s4 cert-manager:1.14.2 k8s-mongo:1.14.0,cluster-name=db1
 ```
 ## Software version specification
 You can use just a bare keyword to specify version or put ':' after keyword to specify a version:

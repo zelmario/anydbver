@@ -24,6 +24,7 @@ const (
 	ANYDBVER_DOCKER_IMAGE_MIXED_WITH_ANSIBLE = 5
 	ANYDBVER_UNKNOWN_KEYWORD                 = 6
 	ANYDBVER_UNKNOWN_VERSION                 = 7
+	ANYDBVER_UNKNOWN_OPTION                  = 8
 )
 
 // A long deploy can sit for minutes with no output at all: installing database

@@ -2807,8 +2807,8 @@ INSERT INTO tests VALUES(20,'sysbench ps57','./anydbver deploy ps:5.7 node1 sysb
 INSERT INTO tests VALUES(21,'repmgr pg16','./anydbver deploy pg:16 repmgr node1 pg:16,master=node0 repmgr node2 pg:16,master=node0 repmgr');
 INSERT INTO tests VALUES(22,'valkey','./anydbver deploy valkey:unstable,docker-image node1 valkey:unstable,docker-image,master=node0 node2 valkey:unstable,docker-image,master=node0');
 INSERT INTO tests VALUES(23,'patroni','./anydbver deploy pg patroni node1 pg:master=node0 patroni:master=node0 node2 pg:master=node0 patroni:master=node0');
-INSERT INTO tests VALUES(24,'mongo kubernetes 1.14.0','anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local cert-manager:1.14.2 k8s-mongo:1.14.0,cluster-name=db1');
-INSERT INTO tests VALUES(25,'pg operator 2.4.0 helm','anydbver deploy k3d:v1.25.16-k3s4,cluster-domain=percona.local cert-manager:1.14.2 k8s-pg:2.4.0,cluster-name=db1,helm');
+INSERT INTO tests VALUES(24,'mongo kubernetes 1.14.0','anydbver deploy k3d:v1.25.16-k3s4 cert-manager:1.14.2 k8s-mongo:1.14.0,cluster-name=db1');
+INSERT INTO tests VALUES(25,'pg operator 2.4.0 helm','anydbver deploy k3d:v1.25.16-k3s4 cert-manager:1.14.2 k8s-pg:2.4.0,cluster-name=db1,helm');
 INSERT INTO tests VALUES(26,'ps group pmm','anydbver deploy pmm:2.42.0,docker-image,port=12443 node1 ps:latest,group-replication pmm-client:2.42.0-6,server=node0 node2 ps:latest,group-replication,master=node1 pmm-client:2.42.0-6,server=node0 node3 ps:latest,group-replication,master=node1 pmm-client:2.42.0-6,server=node0');
 INSERT INTO tests VALUES(27,'mysql 5.7 async','anydbver deploy mysql:5.7.35 os:el7 node1 mysql:5.7.35,master=node0 os:el7');
 INSERT INTO tests VALUES(28,'pxc 5.7 async replica','anydbver deploy pxc:5.7 node1 pxc:5.7,master=node0 node2 pxc:5.7,master=node1,galera node3 pxc:5.7,master=node1,galera');

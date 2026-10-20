@@ -993,7 +993,9 @@ type DeploymentKeywordData struct {
 }
 
 func IsDeploymentVersion(arg string) bool {
-	if strings.HasPrefix(arg, "node") {
+	// "default" is the documented alias for node0, from when the first node
+	// was named that.
+	if strings.HasPrefix(arg, "node") || arg == "default" {
 		return true
 	}
 	if strings.HasPrefix(arg, "v") {
@@ -1456,11 +1458,14 @@ func deployHost(provider string, logger *log.Logger, namespace string, name stri
 			return match
 		})
 
-		re := regexp.MustCompile(`='(node[0-9]+)'`)
+		re := regexp.MustCompile(`='(node[0-9]+|default)'`)
 		content = re.ReplaceAllStringFunc(content, func(match string) string {
 			submatches := re.FindStringSubmatch(match)
 			if len(submatches) > 1 {
 				node := submatches[1]
+				if node == "default" {
+					node = "node0"
+				}
 				ip, err := getNodeIp(provider, logger, namespace, node)
 				if err != nil {
 					fmt.Println("Error getting node ip:", err)
@@ -2050,6 +2055,126 @@ func validateDeployKeywords(logger *log.Logger, args []string) {
 	}
 	logger.Printf("Run 'anydbver deploy help keywords' to list valid keywords.")
 	os.Exit(runtools.ANYDBVER_UNKNOWN_KEYWORD)
+}
+
+// goDeployOptions are options read straight from Go, with no ansible_arguments
+// or k8s_arguments row behind them.
+var goDeployOptions = map[string][]string{
+	"":              {"version", "expose"},
+	"k3d":           {"nodes", "storage-path", "host-alias", "ingress-type", "ingress", "registry-cache"},
+	"coroot-client": {"server", "user", "password", "port"},
+}
+
+// knownDeployOptions maps each keyword to the options that reach the deploy.
+// Options are resolved with a LEFT JOIN against the keyword's rows, so one
+// without a row is dropped and the keyword deploys with its defaults.
+func knownDeployOptions(logger *log.Logger) map[string]map[string]bool {
+	known := map[string]map[string]bool{}
+	add := func(cmd, opt string) {
+		if known[cmd] == nil {
+			known[cmd] = map[string]bool{}
+		}
+		known[cmd][opt] = true
+	}
+	db, err := sql.Open("sqlite", anydbver_common.GetDatabasePath(logger))
+	if err != nil {
+		logger.Printf("Warning: could not open version DB to validate options: %v", err)
+		return nil
+	}
+	defer db.Close()
+	rows, err := db.Query(`select cmd, subcmd from ansible_arguments union select cmd, subcmd from k8s_arguments`)
+	if err != nil {
+		logger.Printf("Warning: could not query options for validation: %v", err)
+		return nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cmd, subcmd string
+		if err := rows.Scan(&cmd, &subcmd); err == nil {
+			add(cmd, subcmd)
+		}
+	}
+	for cmd, opts := range goDeployOptions {
+		if cmd == "" {
+			continue
+		}
+		for _, opt := range opts {
+			add(cmd, opt)
+		}
+	}
+	return known
+}
+
+// unknownDeployOptions returns one error line per option that no row or Go
+// code consumes, e.g. "wall" in "pg:17,wall=logical".
+func unknownDeployOptions(logger *log.Logger, args []string) []string {
+	known := knownDeployOptions(logger)
+	var problems []string
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "node") || strings.TrimSpace(arg) == "" {
+			continue
+		}
+		keyword := ParseDeploymentKeyword(logger, arg)
+		// docker-image nodes pass their options to the container code, not
+		// through the argument tables.
+		if _, isDockerImage := keyword.Args["docker-image"]; isDockerImage {
+			continue
+		}
+		valid, ok := known[keyword.Cmd]
+		if !ok {
+			continue
+		}
+		// ParseDeploymentKeyword also stores the version token itself, and ""
+		// for a keyword with no options, as flags.
+		version := ""
+		if parts := strings.SplitN(arg, ":", 2); len(parts) == 2 {
+			version = strings.SplitN(parts[1], ",", 2)[0]
+		}
+		var bad []string
+		for opt := range keyword.Args {
+			if opt == "" || (opt == version && (IsDeploymentVersion(opt) || opt == "latest")) {
+				continue
+			}
+			if valid[opt] || slices.Contains(goDeployOptions[""], opt) {
+				continue
+			}
+			bad = append(bad, opt)
+		}
+		if len(bad) == 0 {
+			continue
+		}
+		sort.Strings(bad)
+		var options []string
+		suggestable := map[string]bool{}
+		for opt := range valid {
+			if opt != "version" {
+				options = append(options, opt)
+				suggestable[opt] = true
+			}
+		}
+		sort.Strings(options)
+		for _, opt := range bad {
+			line := fmt.Sprintf("Error: unknown option %q for %s (in %q). It would be silently ignored.", opt, keyword.Cmd, arg)
+			if sug := closestKeyword(opt, suggestable); sug != "" {
+				line += fmt.Sprintf(" Did you mean %q?", sug)
+			}
+			problems = append(problems, line)
+		}
+		problems = append(problems, fmt.Sprintf("  Valid options for %s: %s", keyword.Cmd, strings.Join(options, ", ")))
+	}
+	return problems
+}
+
+// validateDeployOptions fails fast on an option the deploy would drop.
+func validateDeployOptions(logger *log.Logger, args []string) {
+	problems := unknownDeployOptions(logger, args)
+	if len(problems) == 0 {
+		return
+	}
+	for _, line := range problems {
+		logger.Println(line)
+	}
+	os.Exit(runtools.ANYDBVER_UNKNOWN_OPTION)
 }
 
 func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider string, namespace string, args []string, verbose bool, memory string, cpus string, keep bool) {
@@ -2746,6 +2871,7 @@ func main() {
 			// before the implicit destroy below, so a typo can't wipe an
 			// existing environment.
 			validateDeployKeywords(logger, args)
+			validateDeployOptions(logger, args)
 			validateDeployVersions(logger, args)
 
 			if !keep {

@@ -142,7 +142,6 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 | Option                  | Meaning                                            |
 |-------------------------|----------------------------------------------------|
 | `nodes=3`               | Number of k3d nodes.                               |
-| `cluster-domain=...`    | DNS domain for the cluster.                        |
 | `ingress=443`           | Ingress host port.                                 |
 | `ingress-type=nginxinc` | Ingress controller flavor.                         |
 | `host-alias="IP:h1\|h2"`| Extra `/etc/hosts` entries.                        |
@@ -165,7 +164,6 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 
 **Gotchas.**
 - K3D RAM appetite: `cert-manager + operator + 3-replica CR ≈ 6–8 GB`. Underprovisioned hosts will see Pending pods and operator CrashLoopBackOff.
-- `cluster-domain=` interacts with ingress and TLS. If you set it, certs must match.
 - Operator `db-version=` only takes effect on first deploy; cross-major changes require destroy+redeploy.
 
 **CloudNativePG (`k8s-cnpg`, alias `cnpg`) differences.**
