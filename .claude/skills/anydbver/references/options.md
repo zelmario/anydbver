@@ -1,6 +1,8 @@
 # Options reference (per family)
 
-> Verified on 2026-08-21. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
+> Verified on 2026-10-20. **`anydbver deploy help <keyword>` is canonical** — these tables are dated. If you are about to emit a non-trivial command for a keyword combination you have not used in the conversation, run that first.
+>
+> Since v0.1.44 `deploy` exits with code 8 on an option the keyword does not accept (it used to be dropped silently), and prints the valid options. `default` is an alias for `node0` in node references (`master=default`, `ldap-master:default`).
 
 ## MySQL / Percona Server / MariaDB / mydb
 
