@@ -15,8 +15,8 @@
 | `mysql-router`      | Install MySQL Router on this node.                  |
 | `nogtid`            | Async replication **without** GTIDs.                |
 | `expose=3306`       | Publish the port to the host.                       |
-| `rocksdb`           | Enable RocksDB storage engine.                      |
-| `sql=<url>`         | Load a SQL dump into the database after start.      |
+| `rocksdb`           | Enable RocksDB storage engine (ps).                 |
+| `sql=<url>`         | Load a SQL file from S3 after start, `https://KEY:SECRET@host:port/bucket/file.sql` (ps, mysql, pxc, pg, ppg). |
 | `opts-file=<path>`  | Merge a my.cnf snippet (path under `configs/`).     |
 
 **Gotchas.** PXC bootstrap: first node has no `master=`. Subsequent nodes use `master=node0,galera`, *or* chain through node1 (`master=node1,galera` on node2/node3) — both are documented patterns. Group Replication: first node has just `group-replication`; later nodes add `master=node0,group-replication`. `opts-file` is silently ignored under `docker-image` mode.
@@ -148,10 +148,10 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 | `ingress-type=nginxinc` | Ingress controller flavor.                         |
 | `host-alias="IP:h1\|h2"`| Extra `/etc/hosts` entries.                        |
 | `namespace=db1`         | k8s namespace to deploy into.                      |
-| `replicas=N`            | Operator replica count.                            |
+| `replicas=N`            | Operator replica count (below 3 sets the unsafe flags on k8s-pxc and k8s-ps). |
 | `shards=N`              | Operator shard count.                              |
 | `cluster-name=db1`      | Logical cluster name created by the operator.     |
-| `db-version=13`         | DB version the operator should provision.          |
+| `db-version=13`         | DB version the operator should provision. On k8s-pxc and k8s-psmdb a bare version (`8.0.46-38.1`) becomes the image tag; k8s-pxc also switches the XtraBackup image to that major. |
 | `helm`                  | Install the operator via Helm.                     |
 | `standby`               | Create a standby cluster (k8s-pg).                 |
 | `proxysql`              | Enable ProxySQL in the cluster (k8s-pxc).          |
@@ -159,10 +159,10 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 | `storage=5Gi`           | PVC size per instance (k8s-cnpg, k8s-crunchy, default `1Gi`). |
 | `memory=1Gi`            | Memory request/limit per instance (k8s-cnpg, k8s-crunchy). |
 | `sql=path.sql`          | SQL file loaded into the new cluster (k8s-cnpg, k8s-crunchy). |
-| `expose`                | LoadBalancer services for the cluster (k8s-crunchy). |
-| `bucket=name`           | pgBackRest S3 bucket (k8s-crunchy, default `operator-testing`). |
-| `s3=URL`                | External S3 endpoint for pgBackRest, `https://KEY:SECRET@host:port/bucket` (k8s-crunchy). |
-| `region=eu-west-1`      | S3 region (k8s-crunchy, default `us-east-1`).      |
+| `expose`                | Reach the cluster from outside k8s: LoadBalancer on the PG primary, NodePorts for the rest and for PXC/PSMDB pods (k8s-pg, k8s-crunchy, k8s-pxc, k8s-psmdb). |
+| `bucket=name`           | Backup S3 bucket (k8s-pg, k8s-crunchy, k8s-pxc, k8s-psmdb; default the `s3=` path, else `operator-testing`). |
+| `s3=URL`                | External S3 backup target, `https://KEY:SECRET@host:port/bucket` (k8s-pg, k8s-crunchy, k8s-pxc, k8s-psmdb). pgBackRest only talks https; PXC/PSMDB also take http. TLS is not verified. |
+| `region=eu-west-1`      | S3 region (default `us-east-1`).                   |
 
 **Gotchas.**
 - K3D RAM appetite: `cert-manager + operator + 3-replica CR ≈ 6–8 GB`. Underprovisioned hosts will see Pending pods and operator CrashLoopBackOff.

@@ -326,7 +326,8 @@ the ones you will use most often.
 | `mysql-router`      | Install MySQL Router on this node                   |
 | `nogtid`            | Async replication **without** GTIDs                 |
 | `expose=3306`       | Publish the port to the host                        |
-| `rocksdb`           | Enable RocksDB storage engine                       |
+| `rocksdb`           | Enable RocksDB storage engine (ps)                  |
+| `sql=URL`           | Load a SQL file from S3, `https://KEY:SECRET@host:port/bucket/file.sql` (ps, mysql, pxc, pg, ppg) |
 
 ### Topology (PostgreSQL)
 
@@ -384,15 +385,15 @@ the ones you will use most often.
 | `ingress-type=nginxinc` | Ingress controller flavor                          |
 | `host-alias="IP:h1\|h2"`| Extra /etc/hosts entries                           |
 | `namespace=db1`         | k8s namespace to deploy into                       |
-| `replicas=N`            | Operator replica count                             |
+| `replicas=N`            | Operator replica count (below 3 sets the operator's unsafe flags on k8s-pxc and k8s-ps) |
 | `shards=N`              | Operator shard count                               |
 | `cluster-name=db1`      | Logical cluster name created by the operator       |
-| `db-version=13`         | DB version the operator should provision           |
+| `db-version=13`         | DB version the operator should provision (a bare version like `8.0.46-38.1` becomes the image tag on k8s-pxc and k8s-psmdb) |
 | `storage=2Gi`           | PVC size per instance (k8s-cnpg, k8s-crunchy)      |
-| `expose`                | LoadBalancer on the primary, NodePorts on the rest (k8s-crunchy) |
-| `bucket=name`           | pgBackRest S3 bucket (k8s-crunchy, default `operator-testing`) |
-| `s3=URL`                | External S3 endpoint for pgBackRest (k8s-crunchy)  |
-| `region=eu-west-1`      | S3 region (k8s-crunchy, default `us-east-1`)       |
+| `expose`                | Reach the cluster from outside k8s: LoadBalancer on the PG primary, NodePorts for the rest and for PXC/PSMDB pods (k8s-pg, k8s-crunchy, k8s-pxc, k8s-psmdb) |
+| `bucket=name`           | Backup S3 bucket (k8s-pg, k8s-crunchy, k8s-pxc, k8s-psmdb; default the `s3=` path, else `operator-testing`) |
+| `s3=URL`                | External S3 backup target, `https://KEY:SECRET@host:port/bucket` (k8s-pg, k8s-crunchy, k8s-pxc, k8s-psmdb; pgBackRest needs https) |
+| `region=eu-west-1`      | S3 region (default `us-east-1`)                    |
 | `memory=1Gi`            | Memory request/limit per instance                  |
 | `sql=path.sql`          | SQL file loaded into the new cluster (k8s-cnpg, k8s-crunchy) |
 | `helm`                  | Install the operator via Helm                      |

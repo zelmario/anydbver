@@ -445,6 +445,22 @@ def docker_hub_tag_exists(repo, tag):
     return None
 
 
+def newest_hub_tag(repo, major):
+    """Newest "<major>.N-N[.N]" tag of a Docker Hub repository, or None."""
+    url = "https://hub.docker.com/v2/repositories/{}/tags?page_size=100&ordering=last_updated".format(repo)
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "anydbver/tag-lookup"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            tags = [t["name"] for t in json.loads(resp.read().decode("utf-8"))["results"]]
+    except Exception as e:
+        logger.warning("Can't list {} tags: {}".format(repo, e))
+        return None
+    matching = [t for t in tags if re.fullmatch(r"{}\.\d+-\d+(\.\d+)?".format(re.escape(major)), t)]
+    if not matching:
+        return None
+    return sorted(matching, key=lambda t: [int(x) for x in re.findall(r"\d+", t)])[-1]
+
+
 def set_pg_major_in_images(db_ver):
     """Point cr.yaml at images for the requested PG major.
 
@@ -1311,8 +1327,10 @@ type: Opaque
               minio_cred_path], "Can't apply s3 secrets")
 
 
-def enable_crunchy_s3(args):
+def enable_pgbackrest_s3(args):
     """Point Crunchy's pgBackRest repo1 at MinIO, or at the endpoint given with s3=.
+
+    Also used for s3= on the Percona PG operator 2.x and 3.x, which shares the CR.
 
     Percona's PG operator is a fork of Crunchy PGO, so the CR fields are the
     ones enable_pgv2_s3 already patches: a repos[] entry carrying s3 instead of
@@ -1404,6 +1422,64 @@ type: Opaque
            cluster_name=args.cluster_name))
     run_fatal(["kubectl", "apply", "-n", args.namespace, "-f", secret_path],
               "Can't apply the pgBackRest s3 secret")
+
+
+def enable_external_s3(args):
+    """Point PXC or PSMDB backups at the endpoint given with s3=.
+
+    The URL is https://KEY:SECRET@host:port/bucket. bucket= overrides the path,
+    region= sets the region. Both operators accept plain http, unlike pgBackRest.
+    TLS verification stays off, a test bucket is self-signed more often than not.
+    """
+    deploy_path = Path(args.data_path) / args.operator_name / "deploy"
+    cr_yaml_path = str((deploy_path / "cr.yaml").resolve())
+    urlparts = urllib.parse.urlparse(args.backup_url)
+    proto = urlparts.scheme if urlparts.scheme else "https"
+    port = urlparts.port if urlparts.port else (443 if proto == "https" else 80)
+    endpoint = "{}://{}:{}".format(proto, urlparts.hostname, port)
+    bucket = args.bucket or urlparts.path.strip("/") or "operator-testing"
+    key = urllib.parse.unquote(urlparts.username or "REPLACE-WITH-AWS-ACCESS-KEY")
+    key_secret = urllib.parse.unquote(urlparts.password or "REPLACE-WITH-AWS-SECRET-KEY")
+    secret_name = "{}-backup-s3-anydbver".format(args.cluster_name)
+    logger.info("Backups go to bucket {} on {}".format(bucket, endpoint))
+
+    secret_path = str((deploy_path / "{}.yaml".format(secret_name)).resolve())
+    with open(secret_path, "w+") as f:
+        f.write("""\
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {name}
+type: Opaque
+data:
+  AWS_ACCESS_KEY_ID: {key}
+  AWS_SECRET_ACCESS_KEY: {secret}
+""".format(name=secret_name,
+           key=base64.b64encode(key.encode()).decode(),
+           secret=base64.b64encode(key_secret.encode()).decode()))
+    run_fatal(["kubectl", "apply", "-n", args.namespace, "-f", secret_path],
+              "Can't apply s3 secrets")
+
+    if args.operator_name == "percona-xtradb-cluster-operator":
+        set_yaml('.spec.backup.storages.s3.type="s3" | '
+                 '.spec.backup.storages.s3.verifyTLS=false | '
+                 '.spec.backup.storages.s3.s3.bucket="{bucket}" | '
+                 '.spec.backup.storages.s3.s3.region="{region}" | '
+                 '.spec.backup.storages.s3.s3.credentialsSecret="{secret}" | '
+                 '.spec.backup.storages.s3.s3.endpointUrl="{endpoint}"'.format(
+                     bucket=bucket, region=args.s3_region, secret=secret_name, endpoint=endpoint),
+                 "Can't add the s3 backup storage", cr_yaml_path)
+    elif args.operator_name == "percona-server-mongodb-operator":
+        set_yaml('.spec.backup.enabled=true | '
+                 '.spec.backup.storages.s3.type="s3" | '
+                 '.spec.backup.storages.s3.s3.bucket="{bucket}" | '
+                 '.spec.backup.storages.s3.s3.region="{region}" | '
+                 '.spec.backup.storages.s3.s3.credentialsSecret="{secret}" | '
+                 '.spec.backup.storages.s3.s3.endpointUrl="{endpoint}" | '
+                 '.spec.backup.storages.s3.s3.insecureSkipTLSVerify=true | '
+                 '.spec.backup.storages.s3.s3.prefix=""'.format(
+                     bucket=bucket, region=args.s3_region, secret=secret_name, endpoint=endpoint),
+                 "Can't add the s3 backup storage", cr_yaml_path)
 
 
 def enable_minio(args):
@@ -1765,8 +1841,29 @@ def setup_operator(args):
             run_fatal(["sed", "-i", "-re", r"s/: cluster1\>/: {}/".format(
                 args.cluster_name), "./deploy/cr.yaml"], "fix cluster name in cr.yaml")
         if args.db_version:
+            if args.db_version[0].isdigit():
+                args.db_version = "percona/percona-xtradb-cluster:" + args.db_version
             set_yaml('.spec.pxc.image = "{}"'.format(
                 args.db_version), "Can't set PXC version")
+            # The backup image has to match the server major: XtraBackup 8.4
+            # refuses an 8.0 data directory, and the CR pins the operator's own.
+            major = re.search(r":(\d+\.\d+)\.", args.db_version)
+            with open("./deploy/cr.yaml") as f:
+                backup_major = re.search(r"^\s*image:\s*\S*percona-xtrabackup:(\d+\.\d+)\.", f.read(), re.MULTILINE)
+            if major and backup_major and major.group(1) != backup_major.group(1):
+                tag = newest_hub_tag("percona/percona-xtrabackup", major.group(1))
+                if tag:
+                    set_yaml('.spec.backup.image = "percona/percona-xtrabackup:{}"'.format(tag),
+                             "Can't set the backup image")
+                else:
+                    logger.warning("No percona-xtrabackup image for PXC {}, backups will fail".format(major.group(1)))
+        if args.db_replicas:
+            # Below 3 the operator refuses the cluster unless it is told it's on purpose.
+            set_yaml('.spec.pxc.size={n} | .spec.haproxy.size={n} | .spec.proxysql.size={n}'.format(
+                n=int(args.db_replicas)), "Change number of replicas")
+            if int(args.db_replicas) < 3:
+                set_yaml('.spec.unsafeFlags.pxcSize=true | .spec.unsafeFlags.proxySize=true',
+                         "allow fewer than 3 nodes")
         if re.match(r'^[0-9\.]*$', args.operator_version) and StrictVersion(args.operator_version) < StrictVersion("1.11.0"):
             args.users_secret = "my-cluster-secrets"
         else:
@@ -1776,7 +1873,8 @@ def setup_operator(args):
                      "Enable proxysql",
                      str((Path(args.data_path) / args.operator_name / "deploy" / "cr.yaml").resolve()))
         if args.expose:
-            set_yaml('.spec.pxc.expose.enabled=true|.spec.pxc.expose.type="LoadBalancer"',
+            # One service per pod, all on 3306, see the PSMDB expose comment.
+            set_yaml('.spec.pxc.expose.enabled=true|.spec.pxc.expose.type="NodePort"',
                      "expose pxc")
 
         set_yaml('.spec.pxc.imagePullPolicy="IfNotPresent"|.spec.haproxy.imagePullPolicy="IfNotPresent"',
@@ -1788,6 +1886,12 @@ def setup_operator(args):
         if args.cluster_name == "":
             args.cluster_name = "cluster1"
         set_yaml('.metadata.name="{}"'.format(args.cluster_name), "fix cluster name in cr.yaml")
+        if args.db_replicas:
+            set_yaml('.spec.mysql.size={n} | .spec.proxy.haproxy.size={n}'.format(
+                n=int(args.db_replicas)), "Change number of replicas")
+            if int(args.db_replicas) < 3:
+                set_yaml('.spec.unsafeFlags.mysqlSize=true | .spec.unsafeFlags.proxySize=true',
+                         "allow fewer than 3 nodes")
 
     if args.operator_name == "percona-postgresql-operator" and args.helm != True:
         args.users_secret = args.cluster_name + "-users"
@@ -1814,8 +1918,10 @@ def setup_operator(args):
                 .spec.pgBouncer.expose.serviceType="LoadBalancer"',
                      "expose PG svcs")
         elif args.expose:
+            # Both services listen on 5432 and k3s servicelb can give a host
+            # port to only one LoadBalancer, so pgBouncer gets a NodePort.
             set_yaml('.spec.expose.type="LoadBalancer"|\
-                .spec.proxy.pgBouncer.expose.type="LoadBalancer"',
+                .spec.proxy.pgBouncer.expose.type="NodePort"',
                      "expose PG svcs")
 
     if args.operator_name == "percona-server-mongodb-operator" and args.helm != True:
@@ -1830,7 +1936,11 @@ def setup_operator(args):
             set_yaml('.spec.clusterServiceDNSSuffix="svc.{}"'.format(args.cluster_domain),
                      "change cluster domain")
         if args.expose:
-            set_yaml('.spec.replsets[0].expose.enabled=true|.spec.replsets[0].expose.exposeType="LoadBalancer"',
+            # One service per pod, all on 27017. k3s servicelb gives a host port
+            # to only one LoadBalancer, so the rest would stay Pending.
+            # 1.18.0 renamed expose.exposeType to expose.type.
+            field = "type" if args.operator_version == "main" or StrictVersion(args.operator_version) >= StrictVersion("1.18.0") else "exposeType"
+            set_yaml('.spec.replsets[0].expose.enabled=true|.spec.replsets[0].expose.{}="NodePort"'.format(field),
                      "expose replset")
         if args.db_version:
             if args.db_version[0].isdigit():
@@ -1934,12 +2044,22 @@ def setup_operator(args):
             logger.warning(
                 "PMM integration is not supported for Crunchy Postgres, ignoring")
         if args.minio or args.backup_url:
-            enable_crunchy_s3(args)
+            enable_pgbackrest_s3(args)
     else:
         enable_pmm(args)
 
         if args.minio:
             enable_minio(args)
+        elif args.backup_url:
+            if args.operator_name == "percona-postgresql-operator":
+                if pg_op_ver_at_least(args.operator_version, "2.0.0"):
+                    enable_pgbackrest_s3(args)
+                else:
+                    logger.warning("s3= is not supported for the PG operator 1.x, ignoring")
+            elif args.operator_name in ("percona-xtradb-cluster-operator", "percona-server-mongodb-operator"):
+                enable_external_s3(args)
+            else:
+                logger.warning("s3= is not supported for {}, ignoring".format(args.operator_name))
 
     if args.operator_name == CNPG_OPERATOR:
         run_cnpg_operator(args.namespace, args.operator_version,

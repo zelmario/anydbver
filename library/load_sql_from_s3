@@ -4,37 +4,61 @@ ok="false"
 
 source $1
 
-MC="/usr/local/bin/mc"
-if [[ -f "/vagrant/tools/mc" ]] ; then
-  MC="/vagrant/tools/mc"
-elif ! [[ -f "$MC" ]] ; then
-  curl --compressed https://dl.min.io/client/mc/release/linux-amd64/mc -o "$MC"
-  chmod +x "$MC"
-fi
-
-
-#s3_sql="http://UIdgE4sXPBTcBB4eEawU:7UdlDzBF769dbIOMVILV@172.17.0.1:9000/sampledb/world.sql"
+#s3_sql="https://UIdgE4sXPBTcBB4eEawU:7UdlDzBF769dbIOMVILV@172.17.0.1:9000/sampledb/world.sql"
 #client=mysql
 
-export MC_HOST_bkp=$(echo $s3_sql | cut -d/ -f1-3)
-s3_file=$(echo $s3_sql | cut -d/ -f4-100)
+# MinIO stopped publishing mc (dl.min.io answers 410), so the object is fetched
+# with a SigV4 signed GET from the Python standard library instead. Path style
+# addressing, TLS verification off: a test bucket is self-signed more often
+# than not.
+s3_get() {
+  python3 - "$1" <<'EOF'
+import datetime, hashlib, hmac, ssl, sys, urllib.parse, urllib.request
+
+url = urllib.parse.urlparse(sys.argv[1])
+host = url.hostname + (":{}".format(url.port) if url.port else "")
+path = urllib.parse.quote(url.path)
+key = urllib.parse.unquote(url.username or "")
+secret = urllib.parse.unquote(url.password or "")
+region = "us-east-1"
+now = datetime.datetime.utcnow()
+amz_date, day = now.strftime("%Y%m%dT%H%M%SZ"), now.strftime("%Y%m%d")
+payload = hashlib.sha256(b"").hexdigest()
+headers = {"host": host, "x-amz-content-sha256": payload, "x-amz-date": amz_date}
+signed = ";".join(sorted(headers))
+canonical = "\n".join(["GET", path, "", "".join("{}:{}\n".format(k, headers[k]) for k in sorted(headers)), signed, payload])
+scope = "{}/{}/s3/aws4_request".format(day, region)
+to_sign = "\n".join(["AWS4-HMAC-SHA256", amz_date, scope, hashlib.sha256(canonical.encode()).hexdigest()])
+k = ("AWS4" + secret).encode()
+for part in (day, region, "s3", "aws4_request"):
+    k = hmac.new(k, part.encode(), hashlib.sha256).digest()
+signature = hmac.new(k, to_sign.encode(), hashlib.sha256).hexdigest()
+headers["Authorization"] = "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}".format(key, scope, signed, signature)
+req = urllib.request.Request("{}://{}{}".format(url.scheme, host, path), headers=headers)
+with urllib.request.urlopen(req, context=ssl._create_unverified_context(), timeout=60) as resp:
+    while True:
+        chunk = resp.read(1 << 16)
+        if not chunk:
+            break
+        sys.stdout.buffer.write(chunk)
+EOF
+}
 
 if [[ "$client" == "mysql" ]] ; then
   until mysql --defaults-file=/root/.my.cnf --silent --connect-timeout=30 --wait -e "SELECT 1;" > /dev/null 2>&1 ; do sleep 5 ; done
 fi
 
-"$MC" ls bkp/"$s3_file" 2>&1 > /tmp/mc-ls.log
-
-if "$MC" cat bkp/"$s3_file" 2> /tmp/mc-cat.log | $client 2> /tmp/db-client.log ; then
+# Without pipefail a failed download looked like success: the client happily
+# runs an empty script.
+set -o pipefail
+if s3_get "$s3_sql" 2> /tmp/s3-get.log | $client 2> /tmp/db-client.log ; then
   changed="true"
   ok="true"
-  msg="loaded sql from S3 $s3_file"
+  msg="loaded sql from S3 ${s3_sql##*@}"
 else
-  changed="false"
-  ok="false"
-  msg="Failed to load sql from S3 $s3_file $(cat /tmp/mc.log)"
+  msg="Failed to load sql from S3 ${s3_sql##*@}: $(tail -qn1 /tmp/s3-get.log /tmp/db-client.log | tr -d '"\n')"
 fi
 
-
-
-printf '{"changed": %s, "ok": %s, "msg": "%s"}' "$changed" "$ok" "$msg"
+failed="true"
+[[ "$ok" == "true" ]] && failed="false"
+printf '{"changed": %s, "failed": %s, "msg": "%s"}' "$changed" "$failed" "$msg"

@@ -127,9 +127,14 @@ anydbver --version                 # binary version
 ## Default versions (snapshot, will rot)
 
 `:latest` (or a bare keyword) does **not** pick the newest version in the DB. It
-drops the version and falls back to the keyword's default in `ansible_arguments`,
-then installs the newest patch matching that prefix. Defaults on 2026-10-20
-(moved to current GA/LTS in v0.1.44):
+deploys the newest **lts** series in the `version_series` table, or the newest
+**ga** one where the vendor has no LTS track, then the newest patch of that series.
+Series marked `preview` or `eol`, and series with no row at all, are never picked.
+Operators and tools without rows fall back to the keyword's `arg_default`. The
+deploy log prints what it picked (`percona-server: no version given, deploying 9.7
+(newest LTS series)`). Check a series with
+`sqlite3 ~/.config/anydbver/anydbver_version.db "select * from version_series"`.
+Defaults on 2026-10-20:
 
 | Product | `latest` resolves to |
 |---------|----------------------|

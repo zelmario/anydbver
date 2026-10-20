@@ -1182,9 +1182,77 @@ func handleDeploymentKeyword(logger *log.Logger, table string, keyword string) s
 	return handleDeploymentKeywordParsed(logger, table, deployment_keyword)
 }
 
+// announcedDefaults keeps the "no version given" line to one per keyword, the
+// kubectl path resolves every keyword more than once.
+var announcedDefaults = map[string]bool{}
+
+// defaultSeries returns the series an unpinned keyword deploys: the newest lts
+// row in version_series, else the newest ga one. Empty when the keyword has no
+// rows, or the version DB predates the table.
+func defaultSeries(logger *log.Logger, cmd string) (string, string) {
+	db, err := sql.Open("sqlite", anydbver_common.GetDatabasePath(logger))
+	if err != nil {
+		return "", ""
+	}
+	defer db.Close()
+	rows, err := db.Query(`select series, status from version_series where keyword = ? and status in ('lts', 'ga')`, cmd)
+	if err != nil {
+		return "", ""
+	}
+	defer rows.Close()
+	best := map[string]string{}
+	for rows.Next() {
+		var series, status string
+		if rows.Scan(&series, &status) == nil && (best[status] == "" || versionLess(best[status], series)) {
+			best[status] = series
+		}
+	}
+	if best["lts"] != "" {
+		return best["lts"], "LTS"
+	}
+	if best["ga"] != "" {
+		return best["ga"], "GA"
+	}
+	return "", ""
+}
+
+// resolveUnpinnedVersion fills in the version of a keyword deployed without
+// one, and says what it picked so the deploy log shows what you got.
+func resolveUnpinnedVersion(logger *log.Logger, table string, keyword DeploymentKeywordData) {
+	if version, ok := keyword.Args["version"]; ok && version != "latest" {
+		return
+	}
+	delete(keyword.Args, "version")
+	if series, status := defaultSeries(logger, keyword.Cmd); series != "" {
+		keyword.Args["version"] = series
+		if !announcedDefaults[keyword.Cmd] {
+			announcedDefaults[keyword.Cmd] = true
+			logger.Printf("%s: no version given, deploying %s (newest %s series)", keyword.Cmd, series, status)
+		}
+		return
+	}
+	// Ansible defaults like patroni's 3.3.0 only switch the tool on, the role
+	// installs whatever the repo ships, so only operator defaults are worth
+	// printing.
+	if announcedDefaults[keyword.Cmd] || table != "k8s_arguments" {
+		return
+	}
+	db, err := sql.Open("sqlite", anydbver_common.GetDatabasePath(logger))
+	if err != nil {
+		return
+	}
+	defer db.Close()
+	var def string
+	if db.QueryRow(`select arg_default from `+table+` where cmd = ? and subcmd = 'version' and arg_type = 'VERSION' limit 1`, keyword.Cmd).Scan(&def) == nil &&
+		def != "" && def != "latest" && IsDeploymentVersion(def) {
+		announcedDefaults[keyword.Cmd] = true
+		logger.Printf("%s: no version given, deploying %s (default)", keyword.Cmd, def)
+	}
+}
+
 func handleDeploymentKeywordParsed(logger *log.Logger, table string, deployment_keyword DeploymentKeywordData) string {
-	if (table == "ansible_arguments" || table == "k8s_arguments") && deployment_keyword.Args["version"] == "latest" {
-		delete(deployment_keyword.Args, "version")
+	if table == "ansible_arguments" || table == "k8s_arguments" {
+		resolveUnpinnedVersion(logger, table, deployment_keyword)
 	}
 	result, err := ExecuteQueries(anydbver_common.GetDatabasePath(logger), table, deployment_keyword.Cmd, deployment_keyword.Args)
 	if err != nil {
@@ -2876,6 +2944,11 @@ func main() {
 
 			if !keep {
 				deleteNamespace(logger, provider, namespace)
+			} else {
+				// deployHost appends to the inventory, so a --keep deploy used to
+				// replay every earlier node too, and wait for ever on one that
+				// had been removed since.
+				os.Remove(anydbver_common.GetAnsibleInventory(logger, namespace))
 			}
 			deployHosts(logger, anydbver_common.GetAnsibleInventory(logger, namespace), provider, namespace, args, verbose, memory, cpus, keep)
 		},
