@@ -2215,7 +2215,7 @@ func unknownDeployOptions(logger *log.Logger, args []string) []string {
 		var options []string
 		suggestable := map[string]bool{}
 		for opt := range valid {
-			if opt != "version" {
+			if opt != "version" && opt != "" {
 				options = append(options, opt)
 				suggestable[opt] = true
 			}
