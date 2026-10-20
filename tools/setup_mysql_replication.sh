@@ -85,8 +85,11 @@ EOF
 }
 
 # SLAVE commands are not preferred
+# 8.4 and 9.x removed them. 5.7 and MariaDB clients print "Distrib" instead.
 has_replica_cmd() {
-  mysql --version | grep -v 'Ver 8.0' | grep -q 'Ver 8'
+  local VER
+  VER=$(mysql --version | grep -v -e Distrib -e MariaDB | grep -oE 'Ver [0-9]+\.[0-9]+' | cut -d' ' -f2)
+  [ -n "$VER" ] && [ "$VER" != 8.0 ] && [ "${VER%%.*}" -ge 8 ]
 }
 
 setup_gtid_replication() {
@@ -117,8 +120,8 @@ is_same_gtid() {
   local SRC="$2"
 
   if has_replica_cmd; then
-    SRC_GTID=$(mysql --defaults-file=/tmp/"$SRC".cnf --connect-timeout=30 --wait -e "show binary log status\G" | tr '\n' ' ' | sed -e 's/^.*Executed_Gtid_Set: //')
-    DST_GTID=$(mysql --defaults-file=/tmp/"$DST".cnf --connect-timeout=30 --wait -e "show binary log status\G" | tr '\n' ' ' | sed -e 's/^.*Executed_Gtid_Set: //')
+    SRC_GTID=$(mysql --defaults-file=/tmp/"$SRC".cnf --connect-timeout=30 --wait -E -e "show binary log status" | tr '\n' ' ' | sed -e 's/^.*Executed_Gtid_Set: //')
+    DST_GTID=$(mysql --defaults-file=/tmp/"$DST".cnf --connect-timeout=30 --wait -E -e "show binary log status" | tr '\n' ' ' | sed -e 's/^.*Executed_Gtid_Set: //')
   else
     SRC_GTID=$(mysql --defaults-file=/tmp/"$SRC".cnf --connect-timeout=30 --wait -e "show master status\G" | tr '\n' ' ' | sed -e 's/^.*Executed_Gtid_Set: //')
     DST_GTID=$(mysql --defaults-file=/tmp/"$DST".cnf --connect-timeout=30 --wait -e "show master status\G" | tr '\n' ' ' | sed -e 's/^.*Executed_Gtid_Set: //')
@@ -146,9 +149,9 @@ setup_position_replication_clone() {
 
   if has_replica_cmd; then
     mysql --defaults-file=/tmp/"$FILE".cnf --connect-timeout=30 --wait <<EOF
-STOP SLAVE;
+STOP REPLICA;
 CHANGE REPLICATION SOURCE TO SOURCE_HOST='$SRC_HOST', SOURCE_USER='$SRC_USER', SOURCE_PASSWORD='$SRC_PASS', SOURCE_LOG_FILE='$BINLOG_FILE', SOURCE_LOG_POS=$BINLOG_POS;
-START SLAVE;
+START REPLICA;
 EOF
   else
     mysql --defaults-file=/tmp/"$FILE".cnf --connect-timeout=30 --wait <<EOF
@@ -237,14 +240,14 @@ EOF
 else
   if [[ "x$TYPE" == "xgtid" ]]; then
     if has_replica_cmd; then
-      GTID=$(mysql --host $MASTER_IP -e 'show binary log status\G' | tr "\n" ' ' | sed -e 's/^.*Executed_Gtid_Set: //' -e 's/ //g')
+      GTID=$(mysql --host $MASTER_IP -E -e 'show binary log status' | tr "\n" ' ' | sed -e 's/^.*Executed_Gtid_Set: //' -e 's/ //g')
     else
       GTID=$(mysql --host $MASTER_IP -e 'show master status\G' | tr "\n" ' ' | sed -e 's/^.*Executed_Gtid_Set: //' -e 's/ //g')
     fi
     if [ "x$GTID" = "x" ]; then
       mysql --host $MASTER_IP -e 'DROP VIEW IF EXISTS mysql.nonexisting_23498985;'
       if has_replica_cmd; then
-        GTID=$(mysql --host $MASTER_IP -e 'show binary log status\G' | tr "\n" ' ' | sed -e 's/^.*Executed_Gtid_Set: //' -e 's/ //g')
+        GTID=$(mysql --host $MASTER_IP -E -e 'show binary log status' | tr "\n" ' ' | sed -e 's/^.*Executed_Gtid_Set: //' -e 's/ //g')
       else
         GTID=$(mysql --host $MASTER_IP -e 'show master status\G' | tr "\n" ' ' | sed -e 's/^.*Executed_Gtid_Set: //' -e 's/ //g')
       fi
@@ -265,7 +268,7 @@ EOF
       if has_replica_cmd; then
         mysql <<EOF
           CHANGE REPLICATION SOURCE TO SOURCE_HOST='${MASTER_IP}', SOURCE_USER='${MASTER_USER}', SOURCE_PASSWORD='${MASTER_PASSWORD}', SOURCE_AUTO_POSITION=1, SOURCE_SSL=1;
-          START SLAVE;
+          START REPLICA;
 EOF
       else
         mysql <<EOF

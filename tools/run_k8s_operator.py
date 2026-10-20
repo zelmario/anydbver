@@ -429,6 +429,22 @@ def newest_distribution_pg_tag(major):
     return sorted(matching, key=lambda t: [int(x) for x in re.findall(r"\d+", t)])[-1]
 
 
+def docker_hub_tag_exists(repo, tag):
+    """True or False from the Docker Hub API, or None when it can't be asked."""
+    url = "https://hub.docker.com/v2/repositories/{}/tags/{}".format(repo, urllib.parse.quote(tag))
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "anydbver/tag-lookup"})
+        with urllib.request.urlopen(req, timeout=30):
+            return True
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return False
+        logger.warning("Can't check {}:{} on Docker Hub: {}".format(repo, tag, e))
+    except Exception as e:
+        logger.warning("Can't check {}:{} on Docker Hub: {}".format(repo, tag, e))
+    return None
+
+
 def set_pg_major_in_images(db_ver):
     """Point cr.yaml at images for the requested PG major.
 
@@ -459,8 +475,24 @@ def set_pg_major_in_images(db_ver):
         logger.info("Using percona-distribution-postgresql:{} for PG {}".format(tag, db_ver))
         return True
 
+    # Not every 2.x release was built for every major (2.4.1 and 2.5.0 stop at
+    # ppg16), and the default db-version=17 used to send those deploys straight
+    # into ImagePullBackOff. Check the rewritten tags before touching cr.yaml.
+    ppg_re = r"ppg[0-9.]+-(postgres-gis|postgres|pgbouncer|pgbackrest)[0-9.-]*"
+    images = set(re.findall(
+        r"^\s*image:\s*(?:docker\.io/)?(percona/percona-postgresql-operator:\S*{})".format(ppg_re.replace("(", "(?:")),
+        cr, re.MULTILINE))
+    for image in sorted(images):
+        target = re.sub(ppg_re, r"ppg{}-\1".format(db_ver), image)
+        repo, tag = target.split(":", 1)
+        if docker_hub_tag_exists(repo, tag) is False:
+            logger.warning(
+                "{} is not published, so this operator version has no PG {} images; "
+                "leaving the images the operator shipped with.".format(target, db_ver))
+            return False
+
     run_fatal(["sed", "-i", "-re",
-               r"s/ppg[0-9.]+-(postgres-gis|postgres|pgbouncer|pgbackrest)[0-9.-]*/ppg{}-\1/".format(db_ver),
+               r"s/{}/ppg{}-\1/".format(ppg_re, db_ver),
               "./deploy/cr.yaml"], "change PG major version in images")
     return True
 
@@ -575,7 +607,7 @@ def cluster_labels(op, op_ver, cluster_name):
     if op == "percona-xtradb-cluster-operator":
         return "app.kubernetes.io/instance={},app.kubernetes.io/component=pxc".format(cluster_name)
     elif op == "percona-server-mysql-operator":
-        return "statefulset.kubernetes.io/pod-name=cluster1-mysql-0"
+        return "statefulset.kubernetes.io/pod-name={}-mysql-0".format(cluster_name)
     elif op == "percona-server-mongodb-operator":
         return "app.kubernetes.io/instance={},app.kubernetes.io/component=mongod".format(cluster_name)
     elif op == "percona-postgresql-operator":
@@ -1749,6 +1781,13 @@ def setup_operator(args):
 
         set_yaml('.spec.pxc.imagePullPolicy="IfNotPresent"|.spec.haproxy.imagePullPolicy="IfNotPresent"',
                  "image pull policy: IfNotPresent")
+
+    if args.operator_name == "percona-server-mysql-operator" and args.helm != True:
+        # The example CR is "cluster1" up to 0.11 and "ps-cluster1" from 0.12,
+        # so set the name instead of substituting it.
+        if args.cluster_name == "":
+            args.cluster_name = "cluster1"
+        set_yaml('.metadata.name="{}"'.format(args.cluster_name), "fix cluster name in cr.yaml")
 
     if args.operator_name == "percona-postgresql-operator" and args.helm != True:
         args.users_secret = args.cluster_name + "-users"

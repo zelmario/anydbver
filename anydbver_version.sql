@@ -4127,7 +4127,7 @@ INSERT INTO percona_backup_mongodb_version VALUES('2.9.0-1','el9','aarch64','htt
 INSERT INTO percona_backup_mongodb_version VALUES('2.9.1-1','el9','aarch64','https://repo.percona.com/pbm/yum/release/9/RPMS/aarch64/percona-backup-mongodb-2.9.1-1.el9.aarch64.rpm');
 INSERT INTO percona_backup_mongodb_version VALUES('2.10.0-1','el9','aarch64','https://repo.percona.com/pbm/yum/release/9/RPMS/aarch64/percona-backup-mongodb-2.10.0-1.el9.aarch64.rpm');
 CREATE TABLE ansible_arguments(cmd TEXT, subcmd TEXT, version_filter TEXT, arg_type TEXT CHECK(arg_type IN('VERSION', 'NODE', 'URL','CONST', '')), arg TEXT, arg_default TEXT, orderno int, always_add int);
-INSERT INTO ansible_arguments VALUES('percona-server','version','%','VERSION','extra_percona_server_version','8.4',1,1);
+INSERT INTO ansible_arguments VALUES('percona-server','version','%','VERSION','extra_percona_server_version','9.7',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server','user','%','','extra_db_user','root',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server','password','%','','extra_db_password','verysecretpassword1^',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server','opts-file','%','','extra_db_opts_file','mysql/async-repl-gtid.cnf',1,1);
@@ -4135,7 +4135,7 @@ INSERT INTO ansible_arguments VALUES('percona-server','cluster','%','','extra_cl
 INSERT INTO ansible_arguments VALUES('percona-server','group-replication','%','','extra_replication_type','group',1,NULL);
 INSERT INTO ansible_arguments VALUES('percona-server','group-replication','%','','extra_db_opts_file','mysql/gr.cnf',2,NULL);
 INSERT INTO ansible_arguments VALUES('percona-server','master','%','NODE','extra_master_ip','',1,NULL);
-INSERT INTO ansible_arguments VALUES('percona-postgresql','version','%','VERSION','extra_percona_postgresql_version','16',1,1);
+INSERT INTO ansible_arguments VALUES('percona-postgresql','version','%','VERSION','extra_percona_postgresql_version','18',1,1);
 INSERT INTO ansible_arguments VALUES('percona-postgresql','user','%','','extra_db_user','postgres',1,1);
 INSERT INTO ansible_arguments VALUES('percona-postgresql','master','%','NODE','extra_master_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('percona-postgresql','cluster','%','','extra_cluster_name','cluster1',1,1);
@@ -4161,7 +4161,7 @@ INSERT INTO ansible_arguments VALUES('percona-postgresql','start-db','%','','ext
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','start-db','%','','extra_start_db','1',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server','start-db','%','','extra_start_db','1',1,1);
 INSERT INTO ansible_arguments VALUES('percona-postgresql','password','%','','extra_db_password','verysecretpassword1^',1,1);
-INSERT INTO ansible_arguments VALUES('pmm-client','version','%','VERSION','extra_pmm_client_version','2',1,1);
+INSERT INTO ansible_arguments VALUES('pmm-client','version','%','VERSION','extra_pmm_client_version','3',1,1);
 INSERT INTO ansible_arguments VALUES('pmm-client','server','%','URL','extra_pmm_url','',1,NULL);
 INSERT INTO ansible_arguments VALUES('percona-xtradb-cluster','version','%','VERSION','extra_percona_xtradb_cluster_version','8.4',1,1);
 INSERT INTO ansible_arguments VALUES('percona-xtradb-cluster','user','%','','extra_db_user','root',1,1);
@@ -4186,7 +4186,7 @@ INSERT INTO ansible_arguments VALUES('percona-server-mongodb','replica-set','%',
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','user','%','','extra_db_user','dba',1,1);
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','password','%','','extra_db_password','secret',1,1);
 INSERT INTO ansible_arguments VALUES('mongodb','cluster','%','','extra_cluster_name','cluster1',1,1);
-INSERT INTO ansible_arguments VALUES('mongodb','version','%','VERSION','extra_mongo_org_version','8.0',1,1);
+INSERT INTO ansible_arguments VALUES('mongodb','version','%','VERSION','extra_mongo_org_version','9.0',1,1);
 INSERT INTO ansible_arguments VALUES('mongodb','opts-file','%','','extra_db_opts_file','mongo/enable_wt.conf',1,1);
 INSERT INTO ansible_arguments VALUES('mongodb','master','%','NODE','extra_master_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('mongodb','start-db','%','','extra_start_db','1',1,1);
@@ -4209,7 +4209,7 @@ INSERT INTO ansible_arguments VALUES('valkey','password','%','','extra_db_passwo
 INSERT INTO ansible_arguments VALUES('valkey','master','%','NODE','extra_master_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('valkey','sentinel','%',NULL,'extra_sentinel','1',1,NULL);
 INSERT INTO ansible_arguments VALUES('valkey','cluster','%','','extra_cluster_name','cluster1',1,NULL);
-INSERT INTO ansible_arguments VALUES('mysql','version','%','VERSION','extra_mysql_version','8.0',1,1);
+INSERT INTO ansible_arguments VALUES('mysql','version','%','VERSION','extra_mysql_version','9.7',1,1);
 INSERT INTO ansible_arguments VALUES('mysql','user','%','','extra_db_user','root',1,1);
 INSERT INTO ansible_arguments VALUES('mysql','password','%','','extra_db_password','verysecretpassword1^',1,1);
 INSERT INTO ansible_arguments VALUES('mysql','opts-file','%','','extra_db_opts_file','mysql/async-repl-gtid.cnf',1,1);
@@ -4225,7 +4225,7 @@ INSERT INTO ansible_arguments VALUES('percona-server','nogtid','%','','extra_db_
 INSERT INTO ansible_arguments VALUES('pgbackrest','version','%','VERSION','extra_pgbackrest_version','1',1,1);
 INSERT INTO ansible_arguments VALUES('sysbench','port','%','','extra_sysbench_port','',1,NULL);
 INSERT INTO ansible_arguments VALUES('sysbench','oltprw','%','','extra_db_features','sysbench_oltp_read_write',1,NULL);
-INSERT INTO ansible_arguments VALUES('mariadb','version','%','VERSION','extra_mariadb_version','11.4.2',1,1);
+INSERT INTO ansible_arguments VALUES('mariadb','version','%','VERSION','extra_mariadb_version','12.3',1,1);
 INSERT INTO ansible_arguments VALUES('mariadb','user','%','','extra_db_user','root',1,1);
 INSERT INTO ansible_arguments VALUES('mariadb','password','%','','extra_db_password','verysecretpassword1^',1,1);
 INSERT INTO ansible_arguments VALUES('mariadb','opts-file','%','','extra_db_opts_file','mariadb/async-repl-gtid-row.cnf',1,1);
@@ -4241,7 +4241,7 @@ INSERT INTO ansible_arguments VALUES('pgbackrest','s3','%','','extra_minio_url',
 INSERT INTO ansible_arguments VALUES('pgbackrest','repo','%','','extra_pgbackrest_repo','',1,NULL);
 INSERT INTO ansible_arguments VALUES('mariadb','galera','%','','extra_replication_type','galera',2,'');
 INSERT INTO ansible_arguments VALUES('mariadb','galera','%','','extra_db_opts_file','mariadb/galera.cnf',2,'');
-INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','version','%','VERSION','extra_pbm_version','2.7.0',1,1);
+INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','version','%','VERSION','extra_pbm_version','2',1,1);
 INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','s3','%','','extra_pbm_s3_url','',1,NULL);
 INSERT INTO ansible_arguments VALUES('ldap','password','%','','extra_db_password','secret',1,1);
 INSERT INTO ansible_arguments VALUES('haproxy-pg','version','%','NODE','extra_haproxy_pg','',1,1);
@@ -4294,22 +4294,22 @@ CREATE TABLE k8s_arguments(
   always_add INT
 );
 INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','','%','TYPE','--operator','percona-postgresql-operator',1,1);
-INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','version','%','VERSION','--version','2.4.1',1,1);
+INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','version','%','VERSION','--version','3.1.0',1,1);
 INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','cluster-name','%','CLUSTER_NAME','--cluster-name','cluster1',1,1);
 INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','namespace','%','NAMESPACE','--namespace','pgo',1,1);
 INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','','%','TYPE','--operator','percona-xtradb-cluster-operator',1,1);
-INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','version','%','VERSION','--version','1.14.0',1,1);
+INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','version','%','VERSION','--version','1.20.0',1,1);
 INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','cluster-name','%','CLUSTER_NAME','--cluster-name','cluster1',1,1);
 INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','namespace','%','NAMESPACE','--namespace','pxc',1,1);
 INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','','%','TYPE','--operator','percona-server-mongodb-operator',1,1);
-INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','version','%','VERSION','--version','1.16.1',1,1);
+INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','version','%','VERSION','--version','1.23.1',1,1);
 INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','cluster-name','%','CLUSTER_NAME','--cluster-name','cluster1',1,1);
 INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','namespace','%','NAMESPACE','--namespace','psmdb',1,1);
 INSERT INTO k8s_arguments VALUES('percona-server-mysql-operator','','%','TYPE','--operator','percona-server-mysql-operator',1,1);
-INSERT INTO k8s_arguments VALUES('percona-server-mysql-operator','version','%','VERSION','--version','0.7.0',1,1);
+INSERT INTO k8s_arguments VALUES('percona-server-mysql-operator','version','%','VERSION','--version','1.2.0',1,1);
 INSERT INTO k8s_arguments VALUES('percona-server-mysql-operator','cluster-name','%','CLUSTER_NAME','--cluster-name','cluster1',1,1);
 INSERT INTO k8s_arguments VALUES('percona-server-mysql-operator','namespace','%','NAMESPACE','--namespace','default',1,1);
-INSERT INTO k8s_arguments VALUES('cert-manager','version','%','VERSION','--cert-manager','1.7.2',1,1);
+INSERT INTO k8s_arguments VALUES('cert-manager','version','%','VERSION','--cert-manager','1.21.2',1,1);
 INSERT INTO k8s_arguments VALUES('percona-postgresql-operator','helm','%',NULL,'--helm','',1,NULL);
 INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','helm','%',NULL,'--helm','',1,NULL);
 INSERT INTO k8s_arguments VALUES('percona-server-mongodb-operator','helm','%',NULL,'--helm','',1,NULL);
@@ -4334,7 +4334,7 @@ INSERT INTO k8s_arguments VALUES('k3d','ingress','%','','--ingress-port','443',1
 INSERT INTO k8s_arguments VALUES('k3d','ingress-type','%','','--ingress','',1,NULL);
 INSERT INTO k8s_arguments VALUES('percona-xtradb-cluster-operator','proxysql','%','','--proxysql','',1,NULL);
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','','%','TYPE','--operator','cloudnative-pg-operator',1,1);
-INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','version','%','VERSION','--version','1.30.0',1,1);
+INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','version','%','VERSION','--version','1.30.1',1,1);
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','cluster-name','%','CLUSTER_NAME','--cluster-name','cluster1',1,1);
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','namespace','%','NAMESPACE','--namespace','cnpg',1,1);
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','replicas','%','','--db-replicas','3',1,1);
@@ -4343,7 +4343,7 @@ INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','db-version','%','DB_
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','memory','%','','--memory','',1,NULL);
 INSERT INTO k8s_arguments VALUES('cloudnative-pg-operator','sql','%','URL','--sql','',1,NULL);
 INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','','%','TYPE','--operator','crunchy-postgres-operator',1,1);
-INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','version','%','VERSION','--version','5.8.8',1,1);
+INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','version','%','VERSION','--version','6.0.2',1,1);
 INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','cluster-name','%','CLUSTER_NAME','--cluster-name','cluster1',1,1);
 INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','namespace','%','NAMESPACE','--namespace','crunchy',1,1);
 INSERT INTO k8s_arguments VALUES('crunchy-postgres-operator','replicas','%','','--db-replicas','3',1,1);
