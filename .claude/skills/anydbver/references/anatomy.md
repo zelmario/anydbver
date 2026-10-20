@@ -58,7 +58,7 @@ Most options are per-node (live in the item shape). A few are cluster-wide flags
 | `--keep` | Add to an existing deployment instead of destroying it first. |
 | `--provider=docker` (default) | Use plain Docker. |
 | `--provider=kubectl` | Deploy against an already-running k8s cluster. |
-| `--cpus=<N>` | Limit each container to N CPUs. |
+| `--cpus=<N>` | Limit each container to N CPUs, docker-image nodes included (`cpus=` on the keyword overrides it). |
 | `-m <bytes>` | Memory limit per container. |
 | `--verbose` | Verbose ansible output. |
 

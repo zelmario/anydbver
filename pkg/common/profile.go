@@ -395,6 +395,19 @@ func ResolveNodeIp(provider string, logger *log.Logger, namespace string, name s
 	return "", errors.New("node ip is not found")
 }
 
+// AppendCPUParams passes cpus= and cpuset= to docker run. Only cpuset shrinks
+// what the container sees as its core count, which is what Go runtimes size
+// their thread pools from.
+func AppendCPUParams(cmd []string, args map[string]string) []string {
+	if cpus, ok := args["cpus"]; ok && cpus != "" {
+		cmd = append(cmd, "--cpus="+cpus)
+	}
+	if cpuset, ok := args["cpuset"]; ok && cpuset != "" {
+		cmd = append(cmd, "--cpuset-cpus="+cpuset)
+	}
+	return cmd
+}
+
 func AppendExposeParams(cmd []string, args map[string]string) []string {
 	if expose_port, ok := args["expose"]; ok {
 		return append(cmd, []string{"-p", expose_port}...)

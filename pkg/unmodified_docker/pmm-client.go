@@ -36,6 +36,7 @@ func CreatePMMClientContainer(logger *log.Logger, namespace string, name string,
 		cmd_args = append(cmd_args, pmm_server_args...)
 	}
 
+	cmd_args = anydbver_common.AppendCPUParams(cmd_args, args)
 	cmd_args = anydbver_common.AppendExposeParams(cmd_args, args)
 	cmd_args = append(cmd_args, args["docker-image"]+":"+args["version"])
 

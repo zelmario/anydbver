@@ -23,6 +23,8 @@ anydbver deploy minio:docker-image  node1 pg pgbackrest:s3=node0
 
 **Supported with `docker-image`:** `mysql`, `postgresql`, `psmdb` / `mongo`, `valkey`, `minio`, `pmm-server`, `pmm-client`.
 
+**CPU limits.** `cpus=N` limits the container (the global `--cpus` is the default since v0.1.47), `cpuset=0-3` pins it to cores. Only `cpuset` shrinks the core count the processes see, so it is what reduces PMM's Go thread pools. PMM's nginx is capped at one worker per allowed CPU, 2 when unlimited, because `worker_processes auto` ignores both limits.
+
 **What `docker-image` changes:**
 - Skips the `dnf` / `apt` package install entirely.
 - Skips the `opts-file` overlay merge into `/etc/<dbconf>` — **custom config snippets are silently ignored**. If you need a custom `my.cnf`, drop `docker-image` and use the package install path.

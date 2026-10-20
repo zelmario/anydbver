@@ -88,6 +88,7 @@ func CreateCorootContainer(logger *log.Logger, namespace string, name string, cm
 	if mem, ok := args["memory"]; ok {
 		cmd_args = append(cmd_args, "--memory="+mem)
 	}
+	cmd_args = anydbver_common.AppendCPUParams(cmd_args, args)
 	if _, ok := args["expose"]; ok {
 		cmd_args = anydbver_common.AppendExposeParams(cmd_args, args)
 	} else if port, ok := args["port"]; ok {

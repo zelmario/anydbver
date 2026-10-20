@@ -368,6 +368,8 @@ the ones you will use most often.
 | `docker-image=registry/image:tag`            | Use a specific image and tag         |
 | `expose=<port>`                              | Publish port to the host             |
 | `admin-port=9091:9090`                       | Explicit host:container port map     |
+| `cpus=2`                                     | CPU limit for the container (default `--cpus`) |
+| `cpuset=0-3`                                 | Pin the container to these cores; also shrinks Go thread pools (PMM) |
 
 ### Authentication
 

@@ -46,6 +46,7 @@ func CreateMinIOContainer(logger *log.Logger, namespace string, name string, cmd
 	if admin_port, ok := args["admin-port"]; ok {
 		cmd_args = append(cmd_args, []string{"-p", admin_port}...)
 	}
+	cmd_args = anydbver_common.AppendCPUParams(cmd_args, args)
 	cmd_args = anydbver_common.AppendExposeParams(cmd_args, args)
 	cmd_args = append(cmd_args, args["docker-image"]+":"+args["version"])
 

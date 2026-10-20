@@ -1386,7 +1386,7 @@ func runOperatorTool(logger *log.Logger, namespace string, name string, run_oper
 	}
 }
 
-func deployHost(provider string, logger *log.Logger, namespace string, name string, ansible_hosts_run_file string, args []string, keep bool) {
+func deployHost(provider string, logger *log.Logger, namespace string, name string, ansible_hosts_run_file string, args []string, keep bool, cpus string) {
 	if provider == "docker-image" {
 		// Same reasoning as createContainer: a docker-image node that already
 		// exists is reused rather than recreated. Products with sidecars, like
@@ -1413,6 +1413,11 @@ func deployHost(provider string, logger *log.Logger, namespace string, name stri
 				continue
 			}
 			if _, ok := deployment_keyword.Args["docker-image"]; ok {
+				// --cpus is the default for docker-image nodes too, cpus= on the
+				// keyword overrides it.
+				if _, set := deployment_keyword.Args["cpus"]; !set && cpus != "" {
+					deployment_keyword.Args["cpus"] = cpus
+				}
 				unmodified_docker.CreateContainer(logger, namespace, name, deployment_keyword.Cmd, deployment_keyword.Args)
 			} else {
 				logger.Printf("Can't mix docker-image items with non-docker. Please keep only a single docker-image command per node.\n Problem with node %s and definition %v", name, args)
@@ -2349,7 +2354,7 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 	for _, k := range nodeIdxs {
 		nodeName := fmt.Sprintf("node%d", k)
 		nodeDef := nodeDefinitions[nodeName]
-		deployHost(nodeProvider[nodeName], logger, namespace, nodeName, ansible_hosts_run_file, nodeDef, keep)
+		deployHost(nodeProvider[nodeName], logger, namespace, nodeName, ansible_hosts_run_file, nodeDef, keep, cpus)
 	}
 
 	for _, k := range nodeIdxs {
