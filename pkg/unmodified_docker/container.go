@@ -63,7 +63,9 @@ func CreateContainer(logger *log.Logger, namespace string, name string, cmd stri
 		CreateValKeyContainer(logger, namespace, name, cmd, args)
 	} else if cmd == "minio" {
 		if args["docker-image"] == "" {
-			args["docker-image"] = "minio/minio"
+			// MinIO stopped publishing images (docker.io/minio/minio is gone,
+			// quay.io answers 401). Pigsty's build is a drop-in with mc inside.
+			args["docker-image"] = "pgsty/minio"
 		}
 		CreateMinIOContainer(logger, namespace, name, cmd, args)
 	} else if cmd == "coroot-server" {

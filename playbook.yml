@@ -75,7 +75,7 @@
     k8s_pmm: "{{ lookup('vars', 'extra_k8s_pmm', default=lookup('env','K8S_PMM',default='') ) }}"
     k8s_namespace: "{{ lookup('vars', 'extra_k8s_namespace', default=lookup('env','K8S_NAMESPACE',default='') ) }}"
     k8s_minio: "{{ lookup('vars', 'extra_k8s_minio', default=lookup('env','K8S_MINIO',default='') ) }}"
-    minio: "{{ lookup('vars', 'extra_minio', default=lookup('env','MINIO',default='') ) }}"
+    minio: "{{ lookup('vars', 'extra_minio', default=lookup('vars', 'extra_minio_version', default=lookup('env','MINIO',default='')) ) }}"
     minio_url: "{{ lookup('vars', 'extra_minio_url', default=lookup('env','MINIO_URL',default='') ) }}"
     cert_manager: "{{ lookup('vars', 'extra_cert_manager', default=lookup('env','CERT_MANAGER',default='') ) }}"
     k3s_flannel_backend: "{{ lookup('vars', 'extra_k3s_flannel_backend', default=lookup('env','K3S_FLANNEL_BACKEND',default='vxlan') ) }}"

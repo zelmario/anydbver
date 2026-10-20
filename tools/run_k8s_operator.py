@@ -150,6 +150,8 @@ def branch_name(ver):
     return 'v' + ver
 
 
+MINIO_RELEASE = "RELEASE.2026-08-04T00-00-00Z"
+MINIO_CHART_VERSION = "5.4.0"
 CNPG_OPERATOR = "cloudnative-pg-operator"
 CRUNCHY_OPERATOR = "crunchy-postgres-operator"
 
@@ -1071,7 +1073,14 @@ def run_minio_server(args):
              "https://charts.min.io/"], "helm repo add problem")
     run_helm(args.helm_path, ["helm", "repo", "update",
              "minio-stable"], "helm repo update problem")
+    # The chart still points at quay.io/minio, which answers 401 since MinIO
+    # stopped publishing images. Pigsty's builds are drop-ins.
     helm_cmd = ["helm", "install", "minio-service", "minio-stable/minio",
+                "--version", MINIO_CHART_VERSION,
+                "--set", "image.repository=pgsty/minio",
+                "--set", "image.tag=" + MINIO_RELEASE,
+                "--set", "mcImage.repository=pgsty/mc",
+                "--set", "mcImage.tag=" + MINIO_RELEASE,
                 "--set", "mode=standalone",
                 "--set", "rootUser=REPLACE-WITH-AWS-ACCESS-KEY",
                 "--set", "rootPassword=REPLACE-WITH-AWS-SECRET-KEY",
