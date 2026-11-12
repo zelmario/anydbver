@@ -98,6 +98,7 @@ nfs-client                       Mounts an NFS share from an nfs-server node
 nfs-server                       Installs an NFS server and exports a share to other nodes
 pgbackrest                       Installs pgbackrest
 pgbouncer                        Installs pgbouncer, Postgresql connection pooler
+pg-tde                           Installs pg_tde for Percona Postgresql 17+ with keys in a vault node (alias: pg_tde)
 coroot-client                    Registers a database with a Coroot server so it is monitored
 coroot-server                    Installs Coroot, an open-source observability server (alias: coroot)
 pmm-client                       Installs Percona Monitoring and Management client
@@ -105,6 +106,7 @@ postgresql                       Installs Postgresql from PGDG packages
 repmgr                           Installs repmgr, Postgresql replication management solution
 sysbench                         Installs sysbench to measure database performance
 valkey                           Installs Valkey
+vault                            Installs HashiCorp Vault, initialized and unsealed, as a key server
 cert-manager                     Installs cert-manager.io TLS certificates management and generation software for Kubernetes
 k3d                              Using a specified node as a multi-server Kubernetes installation (Kubernetes nodes as nested Docker containers)
 k8s-minio                        Installs MinIO S3 Server inside Kubernetes

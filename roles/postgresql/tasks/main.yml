@@ -122,18 +122,49 @@
 
 
 - name: install Postgres
-  when: percona_postgresql_version != '' or postgresql_version != ''
+  when: (percona_postgresql_version != '' or postgresql_version != '') and not (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu')
   package:
     name: "{{ item }}"
     state: present
   with_items: "{{package_info['packages'].split('|')}}"
 
+# One transaction: installing a pinned server alone pulls the newest client,
+# and the pinned client after it would then be a downgrade apt refuses.
+- name: install Postgres (deb)
+  when: (percona_postgresql_version != '' or postgresql_version != '') and (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu')
+  apt:
+    name: "{{package_info['packages'].split('|')}}"
+    state: present
+    allow_downgrade: true
+
+# Old PPG releases install from direct .deb links in package_description.yaml,
+# newer ones (version DB rows for jammy/noble/bookworm) from the ppg apt repo
+# with the "install Postgres" task above.
 - name: install Percona Distribution for PostgreSQL (deb)
-  when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and percona_postgresql_version != ''
+  when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and percona_postgresql_version != '' and (percona_postgresql_version.startswith('11') or percona_postgresql_version.startswith('12') or percona_postgresql_version.startswith('13'))
   apt:
     deb: "{{item}}"
     force: yes
-  with_items: "{{pkg[dist].install_packages}}"
+  # Loops are evaluated before "when", and pkg has no entry for newer dists.
+  with_items: "{{ pkg[dist].install_packages if dist in pkg and 'install_packages' in pkg[dist] else [] }}"
+
+- name: install pg_tde (rpm)
+  when: pg_tde_version != '' and percona_postgresql_version != '' and not (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu')
+  package:
+    name: "percona-pg_tde{{ maj }}-{{ pg_tde_version }}*"
+    state: present
+
+# The Debian server packages depend on percona-pg-tde, so the newest one is
+# already there and an older pinned version is a downgrade. Server and client
+# go in one transaction, the client requires the same version.
+- name: install pg_tde (deb)
+  when: pg_tde_version != '' and percona_postgresql_version != '' and (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu')
+  apt:
+    name:
+      - "percona-pg-tde{{ maj }}=1:{{ pg_tde_version }}*"
+      - "percona-pg-tde{{ maj }}-client=1:{{ pg_tde_version }}*"
+    state: present
+    allow_downgrade: true
 
 - name: install Repmgr
   when: repmgr_version != '' and postgresql_version != ''

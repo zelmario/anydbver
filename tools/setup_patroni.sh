@@ -32,6 +32,18 @@ else
     RESTORE_CMD="cp /home/postgres/archived/%f %p"
 fi
 
+# pg-tde: load the extension on every member, and let the bootstrap leader
+# create the Vault key provider and the default key once the cluster is up.
+# Members that clone from it get the keys with the data files.
+if [ -f /etc/pg_tde/pg_tde.env ] ; then
+  PG_TDE_PARAMS="
+    shared_preload_libraries: pg_tde"
+  PG_TDE_POST_INIT="PGHOST=localhost /usr/local/bin/setup_pg_tde.sh keys"
+else
+  PG_TDE_PARAMS=""
+  PG_TDE_POST_INIT=""
+fi
+
 cat > /tmp/pgpass0 << EOF
 *:*:*:*:$SECRET
 EOF
@@ -48,6 +60,7 @@ export PGPASSFILE=/tmp/pgpass0
 export PATH=/usr/local/sbin:/usr/local/bin:$PG_BIN:/usr/sbin:/usr/bin
 until psql -U postgres -d postgres -h localhost -c '\l'; do sleep 1; done
 psql -U postgres -d postgres -h localhost -c "CREATE USER replicator WITH REPLICATION ENCRYPTED PASSWORD '${SECRET}';"
+${PG_TDE_POST_INIT}
 EOF
 
 chmod +x /usr/local/bin/setup_cluster.sh
@@ -143,7 +156,7 @@ postgresql:
      username: postgres
      password: $SECRET
  parameters:
-    unix_socket_directories: '/var/run/postgresql'
+    unix_socket_directories: '/var/run/postgresql'${PG_TDE_PARAMS}
 watchdog:
  mode: off
 #watchdog:

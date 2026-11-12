@@ -26,6 +26,7 @@ If you only read one section, read [Command Anatomy](#command-anatomy) and
    - [PostgreSQL replication](#postgresql-replication)
    - [PostgreSQL HA with Patroni / repmgr / HAProxy](#postgresql-ha-with-patroni--repmgr--haproxy)
    - [PostgreSQL backups with Barman](#postgresql-backups-with-barman)
+   - [PostgreSQL encryption with pg_tde and Vault](#postgresql-encryption-with-pg_tde-and-vault)
    - [MongoDB / PSMDB replica set](#mongodb--psmdb-replica-set)
    - [MongoDB sharded cluster](#mongodb-sharded-cluster)
    - [Backups (pgbackrest, PBM, MinIO)](#backups-pgbackrest-pbm-minio)
@@ -224,6 +225,13 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `ldap-master`  | Point a client node at an LDAP server      |
 | `kerberos`     | Kerberos (Samba-based) KDC                 |
 
+### Encryption / key management
+
+| Keyword   | Aliases  | What it is                                                     |
+|-----------|----------|----------------------------------------------------------------|
+| `pg-tde`  | `pg_tde` | pg_tde transparent data encryption for Percona PostgreSQL 17+, keys in Vault |
+| `vault`   |          | HashiCorp Vault (community), HTTP on 8200, initialized and unsealed |
+
 ### Kubernetes
 
 | Keyword                          | Aliases             | What it is                           |
@@ -280,7 +288,11 @@ anydbver deploy os:el9 pg:18      # PostgreSQL 18 on Rocky Linux 9
 anydbver deploy os:el10 pg:18     # PostgreSQL 18 on Rocky Linux 10
 anydbver deploy os:jammy kerberos # Kerberos KDC on Ubuntu Jammy
 anydbver deploy os:el8 ppg:17     # Percona PG 17 on Rocky Linux 8
+anydbver deploy os:noble ppg:18   # Percona PG 18 on Ubuntu Noble
 ```
+
+Percona PostgreSQL (`ppg`) runs on the EL family for every major, and on
+`jammy`, `noble` and `bookworm` for 17 and 18.
 
 Common OS keywords: `el7`, `el8`, `el9`, `el10` (RHEL/Rocky family),
 `jammy`, `focal`, `noble` (Ubuntu), `bookworm` (Debian),
@@ -370,6 +382,27 @@ the ones you will use most often.
 | `admin-port=9091:9090`                       | Explicit host:container port map     |
 | `cpus=2`                                     | CPU limit for the container (default `--cpus`) |
 | `cpuset=0-3`                                 | Pin the container to these cores; also shrinks Go thread pools (PMM) |
+
+### Encryption (pg-tde)
+
+`pg-tde:<version>,vault=nodeN` goes on the same node as `ppg:17` or `ppg:18`.
+Options come after the colon: `pg-tde:vault=node0` for the default version.
+
+| Option              | Meaning                                                        |
+|---------------------|----------------------------------------------------------------|
+| `<version>`         | pg_tde version, e.g. `2.2.2` or `2.2` (newest 2.2.x). Default: newest that fits the server. `anydbver versions pg-tde` lists them |
+| `vault=nodeN`       | Required. The node running the `vault` keyword that keeps the keys |
+| `key=<name>`        | Principal key name in Vault. Default `anydbver-<hostname>`, or `anydbver-<cluster>` with Patroni |
+
+Every replica of an encrypted primary (`master=`, Patroni members) needs the
+same `pg-tde` item; the deploy refuses to start otherwise.
+
+pg_tde only loads into the server builds it was made for (otherwise the
+server stops with "Percona API version mismatch"), so anydbver pairs the two
+from the `pg_tde_compat` table: `ppg:17 pg-tde:2.1.2` deploys server 17.10-1,
+`ppg:17.9 pg-tde` deploys pg_tde 2.1.2, and the deploy log says what it
+picked. A pair that cannot work, like `ppg:17.11 pg-tde:2.1.2`, is refused
+with the list of pairs that do.
 
 ### Authentication
 
@@ -567,6 +600,44 @@ anydbver deploy pg  node1 barman:source=node0
 # Streaming-only (continuous WAL streaming, no rsync)
 anydbver deploy pg  node1 barman:source=node0,method=streaming-only pg
 ```
+
+### PostgreSQL encryption with pg_tde and Vault
+
+The `vault` node runs HashiCorp Vault with kv-v2 at `secret/` and a token
+limited to it. Each `pg-tde` node waits for it, loads `pg_tde`, and the
+primary creates the extension (in `postgres` and `template1`), the Vault
+global key provider `anydbver-vault` and a default principal key, as in
+KB0057067. Every table created `USING tde_heap` is then encrypted.
+
+```sh
+# Vault on node0, Percona PG 17 with pg_tde 2.2.2 on node1
+anydbver deploy vault:2.2.2 node1 ppg:17 pg-tde:2.2.2,vault=node0
+
+# Ubuntu Noble, PG 18, primary and a streaming replica
+anydbver deploy \
+  node0 os:noble vault \
+  node1 os:noble ppg:18 pg-tde:vault=node0 \
+  node2 os:noble ppg:18,master=node1 pg-tde:vault=node0
+
+# Patroni cluster with encrypted tables (EL only, like Patroni in anydbver)
+anydbver deploy \
+  node0 vault \
+  node1 ppg:17 pg-tde:vault=node0 patroni:cluster=c1 \
+  node2 ppg:17,master=node1 pg-tde:vault=node0 patroni:master=node1,cluster=c1 \
+  node3 ppg:17,master=node1 pg-tde:vault=node0 patroni:master=node1,cluster=c1
+```
+
+Check it:
+
+```sh
+anydbver exec node1 -- sudo -u postgres psql -c "CREATE TABLE t(id int) USING tde_heap" \
+  -c "SELECT pg_tde_is_encrypted('t')"
+anydbver exec node0 -- bash -lc 'vault kv list secret/'   # root token is in /root/.vault-token
+```
+
+Vault unseals itself on restart with the key in `/root/vault-init.txt`, and
+the pg_tde token has a fixed id. Both are lab conveniences, not production
+practice.
 
 ### MongoDB / PSMDB replica set
 

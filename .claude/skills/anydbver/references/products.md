@@ -74,6 +74,15 @@
 | `ldap-master`  | Point a client node at an LDAP server      |
 | `kerberos`     | Kerberos (Samba-based) KDC                 |
 
+## Encryption / key management
+
+| Keyword   | Aliases  | What it is |
+|-----------|----------|------------|
+| `pg-tde`  | `pg_tde` | pg_tde transparent data encryption on a `ppg:17`/`ppg:18` node, keys in a `vault` node (`pg-tde:<ver>,vault=nodeN`) |
+| `vault`   |          | HashiCorp Vault community, HTTP :8200, auto init/unseal, kv-v2 at `secret/`, limited token for pg_tde |
+
+`ppg` also deploys on `jammy`, `noble` and `bookworm` for majors 17 and 18 (EL for all majors).
+
 ## Kubernetes
 
 | Keyword                          | Aliases                  | What it is                           |

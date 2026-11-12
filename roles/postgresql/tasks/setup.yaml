@@ -50,6 +50,20 @@
           touch "/root/{{ db_opts_file | basename }}.applied"
         creates: "/root/{{ db_opts_file | basename }}.applied"
 
+    - name: Store the Vault token for pg_tde
+      when: pg_tde_version != '' and percona_postgresql_version != ''
+      command:
+        cmd: >-
+          /bin/bash /vagrant/tools/setup_pg_tde.sh token "{{ pg_tde_vault }}"
+          "{{ pg_tde_key if pg_tde_key != '' else ('anydbver-' + cluster_name) if patroni_version != '' else ('anydbver-' + ansible_hostname) }}"
+        creates: /etc/pg_tde/pg_tde.env
+
+    # Patroni writes its own postgresql.conf, setup_patroni.sh adds pg_tde there.
+    - name: Preload pg_tde
+      when: pg_tde_version != '' and percona_postgresql_version != '' and patroni_version == ''
+      command:
+        cmd: /bin/bash /vagrant/tools/setup_pg_tde.sh preload "{{pg_conf_dir}}/postgresql.conf"
+
     - name: Enable logical wal_level for logical replication
       when: replication_type == 'logical' and (postgresql_version != '' or percona_postgresql_version != '')
       shell:
@@ -101,6 +115,13 @@
   when: patroni_version == ''
   command:
     cmd: systemctl start "{{package_info['systemd_service']}}"
+
+# Replicas get the keys with the data files, only the primary creates them.
+- name: Create pg_tde key provider and default key
+  when: pg_tde_version != '' and percona_postgresql_version != '' and master_ip == '' and patroni_version == ''
+  shell:
+    cmd: runuser -u postgres -- /bin/bash /usr/local/bin/setup_pg_tde.sh keys && touch /root/pg_tde.configured
+    creates: /root/pg_tde.configured
 
 - name: Create LDAP user in postgres
   when: (postgresql_version != '' or percona_postgresql_version != '') and ldap_server_ip != '' and db_user != ''

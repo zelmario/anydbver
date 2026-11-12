@@ -7,13 +7,18 @@ PMM_PASS=$5
 SYSTEMD_UNIT=$6
 PG_STAT_MONITOR=$7
 
+# ALTER SYSTEM replaces the whole list, keep pg_tde in it or encrypted tables
+# become unreadable after the restart below.
+TDE=""
+[ -f /etc/pg_tde/pg_tde.env ] && TDE="pg_tde, "
+
 if psql -h $(/vagrant/tools/node_ip.sh) -U $USER -c "SELECT pg_is_in_recovery()" | grep -q f ; then
   psql -h $(/vagrant/tools/node_ip.sh) -U $USER -c "CREATE USER $PMM_USER WITH ENCRYPTED PASSWORD '$PMM_PASS'"
   psql -h $(/vagrant/tools/node_ip.sh) -U $USER -c "GRANT pg_monitor to $PMM_USER"
   if [[ $PG_STAT_MONITOR = yes ]] ; then
-    psql -h $(/vagrant/tools/node_ip.sh) -U $USER -c "ALTER SYSTEM SET shared_preload_libraries TO pg_stat_monitor, pg_stat_statements"
+    psql -h $(/vagrant/tools/node_ip.sh) -U $USER -c "ALTER SYSTEM SET shared_preload_libraries TO ${TDE}pg_stat_monitor, pg_stat_statements"
   else
-    psql -h $(/vagrant/tools/node_ip.sh) -U $USER -c "ALTER SYSTEM SET shared_preload_libraries TO 'pg_stat_statements'"
+    psql -h $(/vagrant/tools/node_ip.sh) -U $USER -c "ALTER SYSTEM SET shared_preload_libraries TO ${TDE}pg_stat_statements"
   fi
   # https://bugzilla.redhat.com/show_bug.cgi?id=1875056
   systemctl restart $SYSTEMD_UNIT

@@ -2946,6 +2946,7 @@ func main() {
 			validateDeployKeywords(logger, args)
 			validateDeployOptions(logger, args)
 			validateDeployVersions(logger, args)
+			args = validatePgTde(logger, args)
 
 			if !keep {
 				deleteNamespace(logger, provider, namespace)

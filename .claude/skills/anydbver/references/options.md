@@ -47,6 +47,18 @@ Inherits all MySQL options above. Cluster-specific:
 
 **Gotchas.** Patroni needs etcd; by default it runs etcd on the first node and others reference it. `standby=nodeN` makes a *standby cluster* (replica of another Patroni cluster) — different from `master=nodeN` which makes a streaming standby of a single node. `repmgr` is a separate keyword on each node, not an option.
 
+## pg_tde (on a ppg 17/18 node)
+
+| Option | Meaning |
+|--------|---------|
+| `pg-tde:<ver>` | pg_tde version (`2.2.2`, `2.2`, ...). Options go after the colon: `pg-tde:vault=node0`; `pg-tde,vault=...` is rejected. |
+| `vault=nodeN` | Required. Node running `vault`. |
+| `key=<name>` | Principal key name. Default `anydbver-<hostname>`, `anydbver-<cluster>` under Patroni. |
+
+pg_tde must match the server build ("Percona API version mismatch" otherwise). anydbver pairs them from `pg_tde_compat`: an unpinned side follows the pinned one (`ppg:17 pg-tde:2.1.2` → server 17.10-1), an impossible explicit pair is refused with the valid list.
+
+Replicas (`master=`) and Patroni members of an encrypted primary need the same `pg-tde` item, the deploy refuses otherwise. pg-tde with `pg:` (PGDG) or ppg < 17 is refused.
+
 ## MongoDB / PSMDB
 
 | Option                                       | Meaning                                             |
