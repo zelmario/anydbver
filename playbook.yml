@@ -42,6 +42,9 @@
     python3_pg_version: "{{ lookup('vars', 'extra_python3_pg_version', default=lookup('env', 'PG_PYTHON3', default='') ) }}"
     pg_logical_db: "{{ lookup('vars', 'extra_pg_logical_db', default=lookup('env', 'PG_LOGICAL_DB', default='') ) }}"
     pg_stat_monitor: "{{ lookup('vars', 'extra_pg_stat_monitor', default=lookup('env', 'PG_STAT_MONITOR', default='') ) }}"
+    pg_tde_version: "{{ lookup('vars', 'extra_pg_tde_version', default=lookup('env', 'PG_TDE', default='') ) }}"
+    pg_tde_vault: "{{ lookup('vars', 'extra_pg_tde_vault', default=lookup('env', 'PG_TDE_VAULT', default='') ) }}"
+    pg_tde_key: "{{ lookup('vars', 'extra_pg_tde_key', default=lookup('env', 'PG_TDE_KEY', default='') ) }}"
     patroni_version: "{{ lookup('vars', 'extra_percona_patroni_version', default=lookup('env', 'PATRONI', default='') ) }}"
     patroni_standby: "{{ lookup('vars', 'extra_patroni_standby', default=lookup('env', 'PATRONI_STANDBY', default='') ) }}"
     repmgr_version: "{{ lookup('vars', 'extra_repmgr_version', default=lookup('env', 'REPMGR', default='') ) }}"
@@ -218,7 +221,7 @@
       {{ {
       'percona-server': percona_server_version, 'pxc': percona_xtradb_cluster_version,
       'mysql': mysql_version, 'mydb': mydb_version, 'mariadb': mariadb_version,
-      'postgresql': postgresql_version, 'percona-postgresql': percona_postgresql_version,
+      'postgresql': postgresql_version, 'percona-postgresql': percona_postgresql_version, 'pg-tde': pg_tde_version,
       'psmdb': psmdb_version, 'mongodb': mongo_org_version,
       'valkey': vites_version, 'pmm-client': pmm_client_version,
       'pbm': pbm_version, 'percona-xtrabackup': percona_xtrabackup_version,

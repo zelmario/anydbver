@@ -1,27 +1,19 @@
 ---
 # tasks file for vault
-- name: Create SSL certificates
-  command:
-    cmd: /bin/bash /vagrant/tools/generate_ssl_certs.sh vault.percona.local client.percona.local
-    creates: /root/certs.tar.gz
-
-- name: Make Vault CA trusted
-  when: (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
-  shell:
-    cmd: >-
-      cp /root/ssl/ca.pem /etc/pki/ca-trust/source/anchors/vault-local.pem ;
-      update-ca-trust 
-    creates: /etc/pki/ca-trust/source/anchors/vault-local.pem
-
+# HashiCorp Vault (community edition) as a key server, the way KB0057067 sets
+# it up for pg_tde: plain HTTP on port 8200, file storage, kv-v2 at secret/.
+# setup_vault_server.sh initializes and unseals it, and creates the token that
+# pg-tde nodes use, so nothing has to be copied between containers.
 - name: Install vault package deps
   package:
     name: "{{item}}"
     state: present
-  with_items: openssl, unzip
+  # EL images ship curl-minimal, which conflicts with the curl package.
+  with_items: "{{ ['unzip', 'curl'] if ansible_distribution in ['Debian', 'Ubuntu'] else ['unzip'] }}"
 
 - name: Download and unpack vault binary
   ansible.builtin.unarchive:
-    src: https://releases.hashicorp.com/vault/{{vault_version}}/vault_{{vault_version}}_linux_amd64.zip
+    src: "https://releases.hashicorp.com/vault/{{vault_version}}/vault_{{vault_version}}_linux_{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}.zip"
     dest: /usr/local/bin
     remote_src: yes
     creates: /usr/local/bin/vault
@@ -29,5 +21,5 @@
 - name: Setup Vault
   when: install_only == ''
   command:
-    cmd: /bin/bash /vagrant/tools/setup_vault_server.sh vault.percona.local
-    creates: /etc/vault/vault.hcl
+    cmd: /bin/bash /vagrant/tools/setup_vault_server.sh
+    creates: /root/vault.configured

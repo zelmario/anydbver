@@ -137,6 +137,23 @@ anydbver deploy pg  node1 barman:source=node0
 anydbver deploy pg  node1 barman:source=node0,method=streaming-only pg
 ```
 
+## PostgreSQL encryption — pg_tde + Vault
+
+```sh
+# Vault on node0, PPG 17 + pg_tde 2.2.2 on node1 (KB0057067 setup)
+anydbver deploy vault:2.2.2 node1 ppg:17 pg-tde:2.2.2,vault=node0
+
+# Debian/Ubuntu, primary + streaming replica
+anydbver deploy node0 os:bookworm vault \
+  node1 os:bookworm ppg:18 pg-tde:vault=node0 \
+  node2 os:bookworm ppg:18,master=node1 pg-tde:vault=node0
+
+# Patroni (EL only)
+anydbver deploy vault \
+  node1 ppg:17 pg-tde:vault=node0 patroni:cluster=c1 \
+  node2 ppg:17,master=node1 pg-tde:vault=node0 patroni:master=node1,cluster=c1
+```
+
 ## MongoDB / PSMDB replica set
 
 ```sh
