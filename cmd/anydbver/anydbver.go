@@ -1288,6 +1288,14 @@ func runOperatorTool(logger *log.Logger, namespace string, name string, run_oper
 		"-v", filepath.Join(homeDir, ".config", "gcloud") + ":/vagrant/secret/gcloud:Z",
 		"-v", filepath.Join(anydbver_common.GetCacheDirectory(logger), "data") + ":/vagrant/data:Z",
 	}
+	// Only the operator tool itself: mounting all of tools/ would make the
+	// container download yq into the checkout.
+	if root := findProjectRoot(); root != "" {
+		tool := filepath.Join(root, "tools", "run_k8s_operator.py")
+		if fi, err := os.Stat(tool); err == nil && !fi.IsDir() {
+			volumes = append(volumes, "-v", tool+":/vagrant/tools/run_k8s_operator.py:Z")
+		}
+	}
 	fix_k3d_config := ""
 	if clusterIp != "" {
 		fix_k3d_config = "sed -i -re 's/0.0.0.0:[0-9]+/" + clusterIp + ":6443/g' /root/.kube/config ;"
@@ -1628,6 +1636,32 @@ func fetchDeployCompletions(logger *log.Logger, toComplete string) []string {
 	return keywords
 }
 
+// findProjectRoot returns the anydbver checkout the binary runs from, or ""
+// for an installed binary. Try the current directory first, then its parent
+// (for when the binary is in tools/), then the directory of the binary.
+// Files found there replace the copies baked into the ansible image, so a dev
+// build tests its own roles and tools without an image rebuild.
+func findProjectRoot() string {
+	if dirInfo, err := os.Stat("roles"); err == nil && dirInfo.IsDir() {
+		root, _ := filepath.Abs(".")
+		return root
+	}
+	if dirInfo, err := os.Stat("../roles"); err == nil && dirInfo.IsDir() {
+		root, _ := filepath.Abs("..")
+		return root
+	}
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		if dirInfo, err := os.Stat(filepath.Join(exeDir, "roles")); err == nil && dirInfo.IsDir() {
+			return exeDir
+		}
+		if dirInfo, err := os.Stat(filepath.Join(filepath.Dir(exeDir), "roles")); err == nil && dirInfo.IsDir() {
+			return filepath.Dir(exeDir)
+		}
+	}
+	return ""
+}
+
 func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file string, verbose bool) {
 	user := anydbver_common.GetUser(logger)
 
@@ -1647,21 +1681,7 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 		"-v", filepath.Dir(anydbver_common.GetConfigPath(logger)) + "/secret:/vagrant/secret:Z",
 	}
 
-	// Try current directory first, then parent directory (for when binary is in tools/),
-	// then fall back to the directory of the binary itself
-	projectRoot := ""
-	if dirInfo, err := os.Stat("roles"); err == nil && dirInfo.IsDir() {
-		projectRoot, _ = filepath.Abs(".")
-	} else if dirInfo, err := os.Stat("../roles"); err == nil && dirInfo.IsDir() {
-		projectRoot, _ = filepath.Abs("..")
-	} else if exePath, err := os.Executable(); err == nil {
-		exeDir := filepath.Dir(exePath)
-		if dirInfo, err := os.Stat(filepath.Join(exeDir, "roles")); err == nil && dirInfo.IsDir() {
-			projectRoot = exeDir
-		} else if dirInfo, err := os.Stat(filepath.Join(filepath.Dir(exeDir), "roles")); err == nil && dirInfo.IsDir() {
-			projectRoot = filepath.Dir(exeDir)
-		}
-	}
+	projectRoot := findProjectRoot()
 	if projectRoot != "" {
 		for _, dir := range []struct{ src, dest string }{
 			{"roles", "/vagrant/roles"},
@@ -1835,6 +1855,38 @@ mirrors:
 	errMsg := "Error creating k3d cluster"
 	ignoreMsg := regexp.MustCompile("ignore this")
 	runtools.RunPipe(logger, k3d_create_cmd, errMsg, ignoreMsg, true, env, 600)
+
+	if cpus, ok := args["cpus"]; ok {
+		limitK3dNodeCPUs(logger, cluster_name, cpus)
+	}
+}
+
+// limitK3dNodeCPUs applies cpus= to every k3d server and agent container,
+// like --cpus does for a docker-image node. k3d cluster create has memory
+// flags but no CPU flag, so the limit is set with docker update. Each node
+// gets the limit, and pods on a node share it.
+func limitK3dNodeCPUs(logger *log.Logger, cluster_name string, cpus string) {
+	if v, err := strconv.ParseFloat(cpus, 64); err != nil || v <= 0 {
+		logger.Fatalf("k3d: cpus=%s is not a positive number of CPUs, for example cpus=2 or cpus=1.5", cpus)
+	}
+	// Docker ANDs label filters, so list servers and agents one at a time.
+	ids := []string{}
+	for _, role := range []string{"server", "agent"} {
+		out, err := exec.Command("docker", "ps", "-q",
+			"--filter", "label=k3d.cluster="+cluster_name,
+			"--filter", "label=k3d.role="+role).Output()
+		if err != nil {
+			logger.Printf("Warning: could not list k3d nodes to apply cpus=%s: %v", cpus, err)
+			return
+		}
+		ids = append(ids, strings.Fields(string(out))...)
+	}
+	if len(ids) == 0 {
+		logger.Printf("Warning: no k3d nodes found for %s, cpus=%s not applied", cluster_name, cpus)
+		return
+	}
+	update := append([]string{"docker", "update", "--cpus", cpus}, ids...)
+	runtools.RunFatal(logger, update, "Error limiting k3d node CPUs", regexp.MustCompile("ignore this"), true, map[string]string{})
 }
 
 func checkEverestPrerequisites(logger *log.Logger) {
@@ -2156,7 +2208,7 @@ func validateDeployKeywords(logger *log.Logger, args []string) {
 // or k8s_arguments row behind them.
 var goDeployOptions = map[string][]string{
 	"":              {"version", "expose"},
-	"k3d":           {"nodes", "storage-path", "host-alias", "ingress-type", "ingress", "registry-cache"},
+	"k3d":           {"nodes", "storage-path", "host-alias", "ingress-type", "ingress", "registry-cache", "cpus"},
 	"coroot-client": {"server", "user", "password", "port"},
 }
 

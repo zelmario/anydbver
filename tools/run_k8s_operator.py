@@ -916,6 +916,15 @@ def run_pmm_server(args, helm_path, pmm):
                                 "--set", "service.type=ClusterIP",
                                 "--set", "imageTag="+pmm["version"], "--set", "platform=kubernetes"]
 
+    # cpus= caps the PMM container like --cpus does for docker-image PMM.
+    # Without a request Kubernetes sets the request to the limit, so the pod
+    # also needs that much free CPU on a node to be scheduled.
+    if args.pmm_cpus:
+        if pmm["helm_repo_name"] == "percona":
+            helm_pmm_install_cmd += ["--set-string", "pmmResources.limits.cpu=" + args.pmm_cpus]
+        else:
+            print("Warning: cpus= needs the percona/pmm chart (PMM 2.28.0 or later), ignoring it")
+
     helm_env = os.environ.copy()
     helm_env["HELM_CACHE_HOME"] = str((helm_path / 'cache').resolve())
     helm_env["HELM_CONFIG_HOME"] = str((helm_path / 'config').resolve())
@@ -2500,6 +2509,7 @@ def main():
     parser.add_argument('--cluster-domain', dest="cluster_domain",
                         type=str, default="cluster.local")
     parser.add_argument('--pmm', dest="pmm", type=str, default="")
+    parser.add_argument('--pmm-cpus', dest="pmm_cpus", type=str, default="")
     parser.add_argument('--minio', dest="minio", type=str, nargs='?')
     parser.add_argument('--backup-type', dest="backup_type",
                         type=str, default="")

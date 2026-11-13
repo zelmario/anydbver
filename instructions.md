@@ -385,6 +385,7 @@ the ones you will use most often.
 | Option                  | Meaning                                            |
 |-------------------------|----------------------------------------------------|
 | `nodes=3`               | Number of k3d nodes                                |
+| `cpus=2`                | CPU limit per k3d node container (k3d), or per PMM pod (k8s-pmm). Write `k3d:cpus=2`: options need the colon |
 | `ingress=443`           | Ingress host port                                  |
 | `ingress-type=nginxinc` | Ingress controller flavor                          |
 | `host-alias="IP:h1\|h2"`| Extra /etc/hosts entries                           |

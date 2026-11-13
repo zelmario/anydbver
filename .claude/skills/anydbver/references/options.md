@@ -144,6 +144,7 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 | Option                  | Meaning                                            |
 |-------------------------|----------------------------------------------------|
 | `nodes=3`               | Number of k3d nodes.                               |
+| `cpus=2`                | CPU limit per k3d server/agent container (`k3d:cpus=2`), or for the PMM pod (`k8s-pmm:3.9.1,cpus=1`, percona/pmm chart only). `cpuset=` has no k8s equivalent. |
 | `ingress=443`           | Ingress host port.                                 |
 | `ingress-type=nginxinc` | Ingress controller flavor.                         |
 | `host-alias="IP:h1\|h2"`| Extra `/etc/hosts` entries.                        |

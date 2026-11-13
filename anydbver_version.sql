@@ -4336,6 +4336,7 @@ INSERT INTO k8s_arguments VALUES('percona-server-mysql-operator','replicas','%',
 INSERT INTO k8s_arguments VALUES('k8s-minio','version','%','VERSION','--minio','latest,helm=minio',1,1);
 INSERT INTO k8s_arguments VALUES('k8s-minio','certs','%','','--minio-certs','self-signed',1,1);
 INSERT INTO k8s_arguments VALUES('k8s-pmm','version','%','VERSION','--pmm','2.42.0,helm=percona-helm-charts:1.3.14,certs=self-signed,namespace=monitoring',1,1);
+INSERT INTO k8s_arguments VALUES('k8s-pmm','cpus','%','','--pmm-cpus','',1,NULL);
 INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','version','%','VERSION','--pmm-ha','1.4.1',1,1);
 INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','deps','%','','--pmm-ha-deps','1.0.0',1,1);
 INSERT INTO k8s_arguments VALUES('k8s-pmm-ha','namespace','%','','--namespace','pmm',1,1);
