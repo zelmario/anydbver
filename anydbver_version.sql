@@ -4295,6 +4295,8 @@ INSERT INTO ansible_arguments VALUES('percona-server','sql','%','','extra_s3sql'
 INSERT INTO ansible_arguments VALUES('percona-server-mongodb','kerberos-server','%','NODE','extra_kerberos_samba_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('percona-postgresql','kerberos-server','%','NODE','extra_kerberos_samba_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('percona-postgresql','sql','%','','extra_s3sql','',1,NULL);
+INSERT INTO ansible_arguments VALUES('percona-postgresql','tde','%','','extra_pg_tde','file',1,NULL);
+INSERT INTO ansible_arguments VALUES('percona-postgresql','tde-wal','%','','extra_pg_tde_wal','1',1,NULL);
 INSERT INTO ansible_arguments VALUES('postgresql','kerberos-server','%','NODE','extra_kerberos_samba_ip','',1,NULL);
 INSERT INTO ansible_arguments VALUES('postgresql','sql','%','','extra_s3sql','',1,NULL);
 INSERT INTO ansible_arguments VALUES('nfs-server','version','%','VERSION','extra_nfs_server','1',1,1);
@@ -4513,6 +4515,7 @@ INSERT INTO help_examples VALUES('percona-server','anydbver deploy ps:8.0,nogtid
 INSERT INTO help_examples VALUES('percona-server','anydbver deploy ps:8.0,rocksdb,sql=http://UIdgE4sXPBTcBB4eEawU:7UdlDzBF769dbIOMVILV@172.17.0.1:9000/sampledb/world.sql percona-xtrabackup:8.0');
 INSERT INTO help_examples VALUES('percona-orchestrator','anydbver deploy ps:5.7 node1 ps:5.7,master=node0 node2 ps:5.7,master=node1 node3 percona-orchestrator:latest,master=node0');
 INSERT INTO help_examples VALUES('percona-postgresql','anydbver deploy node0 ppg:latest pgbackrest');
+INSERT INTO help_examples VALUES('percona-postgresql','anydbver deploy ppg:18,tde=vault,tde-wal');
 INSERT INTO help_examples VALUES('pgbackrest','anydbver deploy node0 ppg:latest pgbackrest');
 INSERT INTO help_examples VALUES('sysbench','anydbver deploy node0 ps:8.0,group-replication node1 ps:8.0,group-replication,master=node0 node2 ps:8.0,mysql-router,master=node0 node3 ps:8.0 sysbench:latest,mysql=node2,port=6446,oltprw');
 INSERT INTO help_examples VALUES('pmm-server','anydbver deploy pmm:docker-image=perconalab/pmm-server:dev-latest,port=12443 node1 mysql:latest,docker-image node2 pmm-client:docker-image=perconalab/pmm-client:dev-latest,server=node0,mysql=node1');

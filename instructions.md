@@ -342,6 +342,9 @@ the ones you will use most often.
 | `standby=nodeN`     | Patroni standby cluster pointing at another cluster |
 | `etcd-ip=nodeN`     | Use `nodeN` as etcd endpoint                        |
 | `clustercheck`      | Enable HAProxy-compatible health endpoint           |
+| `tde`               | pg_tde with a local key file (ppg 17+, EL, no `master=`) |
+| `tde=vault`         | pg_tde with HashiCorp Vault on the same node        |
+| `tde-wal`           | Also encrypt WAL (`pg_tde.wal_encrypt = on`)        |
 
 ### Topology (MongoDB / PSMDB)
 
@@ -567,6 +570,32 @@ anydbver deploy \
   node3 ppg:17 patroni:standby=node0,cluster=cluster12 \
   node4 ppg:17,master=node3 patroni:master=node3,cluster=cluster12
 ```
+
+### PostgreSQL Transparent Data Encryption (pg_tde)
+
+Percona PostgreSQL 17 and later ship pg_tde. The `tde` option installs it,
+preloads it, creates the extension in `postgres` and `template1`, and sets a
+default principal key named `anydbver-key`:
+
+```sh
+# Key in a local keyring file
+anydbver deploy ppg:18,tde
+
+# Key in HashiCorp Vault on the same node, WAL encrypted too
+anydbver deploy ppg:18,tde=vault,tde-wal os:el9
+```
+
+Tables are encrypted when you ask for the `tde_heap` access method:
+
+```sh
+anydbver exec node0 -- sudo -u postgres psql -c "create table t (id int) using tde_heap"
+anydbver exec node0 -- sudo -u postgres psql -c "select pg_tde_is_encrypted('t')"
+```
+
+Vault listens on `127.0.0.1:8200` without TLS, stores its unseal key in
+`/etc/vault.d/init.json` and unseals itself when it restarts. That is fine for
+a test node and wrong for anything else. Replicas (`master=`) are not
+supported with `tde` yet.
 
 ### PostgreSQL backups with Barman
 

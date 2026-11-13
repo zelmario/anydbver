@@ -102,6 +102,10 @@
   command:
     cmd: systemctl start "{{package_info['systemd_service']}}"
 
+- name: Transparent Data Encryption (pg_tde)
+  when: pg_tde != '' and patroni_version == ''
+  include_tasks: pg_tde.yaml
+
 - name: Create LDAP user in postgres
   when: (postgresql_version != '' or percona_postgresql_version != '') and ldap_server_ip != '' and db_user != ''
   shell:

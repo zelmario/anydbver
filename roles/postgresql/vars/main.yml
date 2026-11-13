@@ -45,3 +45,6 @@ package_info: >
 
 
 pg_systemd_svc: "{{ package_info['systemd_service'] if package_info != '' else pkg[dist].systemd if ('systemd' in pkg[dist]) and percona_postgresql_version !='' else os[dist][soft].systemd_service if soft else db_systemd_service }}"
+# pg_tde keyring file and Vault token live in the postgres home directory.
+pg_tde_dir: "{{ '/var/lib/pgsql' if ansible_os_family == 'RedHat' else '/var/lib/postgresql' }}"
+pg_tde_vault_version: "2.2.2"

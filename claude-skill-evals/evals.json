@@ -250,6 +250,18 @@
         "Does NOT pass user=default",
         "Does NOT claim the Keeper is a 3-member quorum"
       ]
+    },
+    {
+      "id": "pg-tde-vault",
+      "prompt": "I need a Percona PostgreSQL 18 node with pg_tde where the key lives in Vault, and WAL should be encrypted too. How do I do that with anydbver?",
+      "expected_output": "anydbver deploy ppg:18,tde=vault,tde-wal (optionally os:el9), plus a check that creates a table USING tde_heap and runs pg_tde_is_encrypted.",
+      "expectations": [
+        "Uses ppg (Percona PostgreSQL) 17 or 18, not community pg",
+        "Uses tde=vault and tde-wal on the ppg keyword",
+        "Does NOT add a separate vault keyword or node",
+        "Shows CREATE TABLE ... USING tde_heap and pg_tde_is_encrypted to verify",
+        "Does NOT combine tde with master= (replicas are not supported)"
+      ]
     }
   ]
 }

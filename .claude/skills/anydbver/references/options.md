@@ -42,8 +42,13 @@ Inherits all MySQL options above. Cluster-specific:
 | `standby=nodeN`     | Patroni standby cluster pointing at another cluster. |
 | `etcd-ip=nodeN`     | Use `nodeN` as etcd endpoint.                       |
 | `clustercheck`      | Enable HAProxy-compatible health endpoint.          |
+| `tde`               | pg_tde with a local keyring file. ppg 17+ on EL only, not with `master=`. |
+| `tde=vault`         | pg_tde with a HashiCorp Vault on the same node (`127.0.0.1:8200`, self-unsealing). |
+| `tde-wal`           | Also set `pg_tde.wal_encrypt = on`. |
 | `expose=5432`       | Publish to host.                                    |
 | `password=<pwd>`    | Override the default DB password.                   |
+
+**pg_tde.** `tde` creates the extension in `postgres` and `template1` and a default principal key `anydbver-key`; tables are encrypted only with `USING tde_heap`. Check with `select pg_tde_is_encrypted('t')`. `postgresql-<maj>` is not enabled at boot, so after `docker restart` start it with `systemctl start postgresql-18` (Vault unseals itself).
 
 **Gotchas.** Patroni needs etcd; by default it runs etcd on the first node and others reference it. `standby=nodeN` makes a *standby cluster* (replica of another Patroni cluster) — different from `master=nodeN` which makes a streaming standby of a single node. `repmgr` is a separate keyword on each node, not an option.
 

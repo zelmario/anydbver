@@ -127,6 +127,17 @@ anydbver deploy \
   node4 ppg:17,master=node3 patroni:master=node3,cluster=cluster12
 ```
 
+## PostgreSQL TDE (pg_tde)
+
+```sh
+anydbver deploy ppg:18,tde                          # key in a local keyring file
+anydbver deploy ppg:18,tde=vault,tde-wal os:el9     # key in Vault on the same node, WAL encrypted
+anydbver exec node0 -- sudo -u postgres psql -c "create table t (id int) using tde_heap"
+anydbver exec node0 -- sudo -u postgres psql -c "select pg_tde_is_encrypted('t')"
+```
+
+Percona PostgreSQL 17+ on EL only, primary only (no `master=` yet).
+
 ## PostgreSQL backups — Barman
 
 ```sh

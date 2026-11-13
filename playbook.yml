@@ -43,6 +43,8 @@
     percona_postgresql_version2: "{{ lookup('vars', 'extra_percona_postgresql_version2', default=lookup('env', 'PPGSQL2', default='') ) }}"
     python3_pg_version: "{{ lookup('vars', 'extra_python3_pg_version', default=lookup('env', 'PG_PYTHON3', default='') ) }}"
     pg_logical_db: "{{ lookup('vars', 'extra_pg_logical_db', default=lookup('env', 'PG_LOGICAL_DB', default='') ) }}"
+    pg_tde: "{{ lookup('vars', 'extra_pg_tde', default=lookup('env', 'PG_TDE', default='') ) }}"
+    pg_tde_wal: "{{ lookup('vars', 'extra_pg_tde_wal', default=lookup('env', 'PG_TDE_WAL', default='') ) }}"
     pg_stat_monitor: "{{ lookup('vars', 'extra_pg_stat_monitor', default=lookup('env', 'PG_STAT_MONITOR', default='') ) }}"
     patroni_version: "{{ lookup('vars', 'extra_percona_patroni_version', default=lookup('env', 'PATRONI', default='') ) }}"
     patroni_standby: "{{ lookup('vars', 'extra_patroni_standby', default=lookup('env', 'PATRONI_STANDBY', default='') ) }}"

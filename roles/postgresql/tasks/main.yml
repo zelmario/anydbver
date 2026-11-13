@@ -127,6 +127,25 @@
     name: "{{ package_info['packages'].split('|') }}"
     state: present
 
+- name: Check that pg_tde can be deployed here
+  when: pg_tde != ''
+  fail:
+    msg: >-
+      tde needs Percona PostgreSQL 17 or later on an EL node, deployed without master=
+      (got {{ 'pg' if percona_postgresql_version == '' else 'ppg:' + percona_postgresql_version }}
+      on {{ dist }}{{ ', master=' + master_ip if master_ip != '' else '' }}). pg_tde is not in
+      community PostgreSQL, and anydbver does not set up encrypted replicas yet.
+      Valid values: tde (key file), tde=vault (HashiCorp Vault on the same node).
+  failed_when: >
+    percona_postgresql_version == '' or (maj | int) < 17 or ansible_os_family != 'RedHat'
+    or master_ip != '' or pg_tde not in ['file', 'vault']
+
+- name: Install pg_tde
+  when: pg_tde != ''
+  package:
+    name: "percona-pg_tde{{ maj }}"
+    state: present
+
 - name: install Percona Distribution for PostgreSQL (deb)
   when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and percona_postgresql_version != ''
   apt:

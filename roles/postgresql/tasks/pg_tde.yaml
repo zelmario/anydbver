@@ -1,0 +1,171 @@
+---
+# Transparent Data Encryption with pg_tde (Percona PostgreSQL 17+).
+#   tde        global key provider in a local keyring file
+#   tde=vault  global key provider in a HashiCorp Vault on this node
+#   tde-wal    also encrypt WAL (pg_tde.wal_encrypt = on)
+# Runs once the database is up. Creates the extension in postgres and
+# template1, a principal key "anydbver-key", and makes it the default, so
+# "CREATE TABLE ... USING tde_heap" works right after the deploy.
+
+- name: Install HashiCorp Vault for pg_tde
+  when: pg_tde == 'vault'
+  block:
+    - name: Install unzip for the Vault download
+      package:
+        name: unzip
+        state: present
+
+    - name: Download and unpack the Vault binary
+      unarchive:
+        src: "https://releases.hashicorp.com/vault/{{ pg_tde_vault_version }}/vault_{{ pg_tde_vault_version }}_linux_{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}.zip"
+        dest: /usr/local/bin
+        remote_src: yes
+        creates: /usr/local/bin/vault
+
+    - name: Create Vault directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0700'
+      loop:
+        - /etc/vault.d
+        - /var/lib/vault
+
+    # Plain HTTP on loopback: the server and its only client share the node,
+    # so there is no certificate to hand around.
+    - name: Configure Vault
+      copy:
+        dest: /etc/vault.d/vault.hcl
+        content: |
+          listener "tcp" {
+            address     = "127.0.0.1:8200"
+            tls_disable = 1
+          }
+          storage "file" {
+            path = "/var/lib/vault"
+          }
+          disable_mlock = true
+          api_addr      = "http://127.0.0.1:8200"
+          ui            = false
+
+    # Vault starts sealed after every restart. A test node keeps the unseal
+    # key on disk and unseals itself, otherwise PostgreSQL cannot read its
+    # principal key after "docker restart" and refuses to start.
+    - name: Vault unseal helper
+      copy:
+        dest: /usr/local/bin/vault-unseal.sh
+        mode: '0755'
+        content: |
+          #!/bin/bash
+          export VAULT_ADDR=http://127.0.0.1:8200
+          # Wait for the API. Sealed (503) and not initialized (501) also count.
+          for i in $(seq 60); do
+            [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8200/v1/sys/health)" != 000 ] && break
+            sleep 1
+          done
+          if [ -f /etc/vault.d/init.json ]; then
+            /usr/local/bin/vault operator unseal "$(python3 -c 'import json;print(json.load(open("/etc/vault.d/init.json"))["unseal_keys_b64"][0])')" >/dev/null
+          fi
+          exit 0
+
+    - name: Vault systemd unit
+      copy:
+        dest: /etc/systemd/system/vault.service
+        content: |
+          [Unit]
+          Description=HashiCorp Vault for pg_tde (anydbver)
+          After=network-online.target
+          Before={{ pg_systemd_svc }}.service
+
+          [Service]
+          ExecStart=/usr/local/bin/vault server -config=/etc/vault.d/vault.hcl
+          ExecStartPost=/usr/local/bin/vault-unseal.sh
+          Restart=on-failure
+          RestartSec=5
+
+          [Install]
+          WantedBy=multi-user.target
+
+    # PostgreSQL needs Vault up before it starts, or reading the principal
+    # key fails at startup.
+    - name: Create the PostgreSQL systemd drop-in directory
+      file:
+        path: "/etc/systemd/system/{{ pg_systemd_svc }}.service.d"
+        state: directory
+
+    - name: Start PostgreSQL after Vault
+      copy:
+        dest: "/etc/systemd/system/{{ pg_systemd_svc }}.service.d/vault.conf"
+        content: |
+          [Unit]
+          Wants=vault.service
+          After=vault.service
+
+    - name: Start Vault
+      systemd:
+        name: vault
+        state: started
+        enabled: yes
+        daemon_reload: yes
+
+    - name: Initialize and unseal Vault, create the pg_tde mount and token
+      shell:
+        cmd: |
+          set -e
+          export VAULT_ADDR=http://127.0.0.1:8200
+          vault operator init -key-shares=1 -key-threshold=1 -format=json > /etc/vault.d/init.json
+          chmod 0600 /etc/vault.d/init.json
+          /usr/local/bin/vault-unseal.sh
+          export VAULT_TOKEN=$(python3 -c 'import json;print(json.load(open("/etc/vault.d/init.json"))["root_token"])')
+          vault secrets enable -path=tde -version=2 kv
+          vault policy write tde-policy - <<'EOF'
+          path "tde/data/*" { capabilities = ["read", "create", "update", "list"] }
+          path "tde/metadata/*" { capabilities = ["read", "list"] }
+          path "sys/mounts/*" { capabilities = ["read"] }
+          EOF
+          vault token create -policy=tde-policy -period=768h -field=token > {{ pg_tde_dir }}/vault-token
+          chown postgres:postgres {{ pg_tde_dir }}/vault-token
+          chmod 0600 {{ pg_tde_dir }}/vault-token
+        creates: /etc/vault.d/init.json
+
+- name: Load pg_tde at startup
+  shell:
+    cmd: |
+      set -e
+      cur=$(sudo -u postgres psql -Atc 'show shared_preload_libraries')
+      case ",$cur," in *,pg_tde,*) exit 0;; esac
+      sudo -u postgres psql -v ON_ERROR_STOP=1 -c "ALTER SYSTEM SET shared_preload_libraries = '${cur:+$cur,}pg_tde'"
+      systemctl daemon-reload
+      systemctl restart {{ pg_systemd_svc }}
+    chdir: /tmp
+
+- name: Create the pg_tde extension, key provider and default principal key
+  shell:
+    cmd: |
+      set -e
+      psql() { sudo -u postgres psql -v ON_ERROR_STOP=1 -Atq "$@"; }
+      psql -d postgres -c 'CREATE EXTENSION IF NOT EXISTS pg_tde'
+      psql -d template1 -c 'CREATE EXTENSION IF NOT EXISTS pg_tde'
+      {% if pg_tde == 'vault' %}
+      psql -c "SELECT pg_tde_add_global_key_provider_vault_v2('anydbver-vault', 'http://127.0.0.1:8200', 'tde', '{{ pg_tde_dir }}/vault-token', NULL)"
+      psql -c "SELECT pg_tde_create_key_using_global_key_provider('anydbver-key', 'anydbver-vault')"
+      psql -c "SELECT pg_tde_set_default_key_using_global_key_provider('anydbver-key', 'anydbver-vault')"
+      {% else %}
+      psql -c "SELECT pg_tde_add_global_key_provider_file('anydbver-file', '{{ pg_tde_dir }}/keyring.per')"
+      psql -c "SELECT pg_tde_create_key_using_global_key_provider('anydbver-key', 'anydbver-file')"
+      psql -c "SELECT pg_tde_set_default_key_using_global_key_provider('anydbver-key', 'anydbver-file')"
+      {% endif %}
+      touch /root/pg_tde.configured
+    chdir: /tmp
+    creates: /root/pg_tde.configured
+
+- name: Encrypt WAL with pg_tde
+  when: pg_tde_wal != ''
+  shell:
+    cmd: |
+      set -e
+      sudo -u postgres psql -v ON_ERROR_STOP=1 -c 'ALTER SYSTEM SET pg_tde.wal_encrypt = on'
+      systemctl restart {{ pg_systemd_svc }}
+      touch /root/pg_tde_wal.configured
+    chdir: /tmp
+    creates: /root/pg_tde_wal.configured
