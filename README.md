@@ -105,6 +105,7 @@ postgresql                       Installs Postgresql from PGDG packages
 repmgr                           Installs repmgr, Postgresql replication management solution
 sysbench                         Installs sysbench to measure database performance
 valkey                           Installs Valkey
+clickhouse                       Installs ClickHouse from packages.clickhouse.com, replicas share a ClickHouse Keeper (master=node0)
 cert-manager                     Installs cert-manager.io TLS certificates management and generation software for Kubernetes
 k3d                              Using a specified node as a multi-server Kubernetes installation (Kubernetes nodes as nested Docker containers)
 k8s-minio                        Installs MinIO S3 Server inside Kubernetes
@@ -160,8 +161,9 @@ anydbver deploy help percona-server-mongodb-operator
 ```
 
 ## docker-image subcommand
-anydbver by default tries to mimic normal bare-metal Linux deployments, but you may need more speed/flexibility by using unmodified docker images for MySQL, Mongo, Postgresql, Valkey, MinIO
+anydbver by default tries to mimic normal bare-metal Linux deployments, but you may need more speed/flexibility by using unmodified docker images for MySQL, Mongo, Postgresql, Valkey, ClickHouse, MinIO
 ```
+anydbver deploy clickhouse:26.8,docker-image node1 clickhouse:26.8,docker-image,master=node0
 anydbver deploy valkey:unstable,docker-image node1 valkey:unstable,docker-image,master=node0 node2 valkey:unstable,docker-image,master=node0
 anydbver deploy pmm:2.42.0,docker-image,port=12443 node1 ps:latest,group-replication pmm-client:2.42.0-6,server=node0 node2 ps:latest,group-replication,master=node1 pmm-client:2.42.0-6,server=node0 node3 ps:latest,group-replication,master=node1 pmm-client:2.42.0-6,server=node0
 anydbver deploy pmm:docker-image=perconalab/pmm-server:dev-latest,port=12443 node1 mysql:latest,docker-image node2 pmm-client:docker-image=perconalab/pmm-client:dev-latest,server=node0,mysql=node1

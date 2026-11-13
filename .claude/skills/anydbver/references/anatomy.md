@@ -36,7 +36,7 @@ Cross-node refs use the literal node token. The CLI rewrites it to the container
 
 | Form | Where |
 |------|-------|
-| `master=node0` | Source/primary on node0 (MySQL, PG, PSMDB, valkey). |
+| `master=node0` | Source/primary on node0 (MySQL, PG, PSMDB, valkey). For ClickHouse, the node whose Keeper the cluster uses. |
 | `master=default` | Same as `master=node0`. `default` is anydbver's alias for node0. |
 | `master:default` | Same again — colon form, used in older `install` + `cache:` examples (CACHING.md, MONGO.md). Both colon and equals forms are accepted by the parser. |
 | `primary=node0` | Same as `master=` for PG (either form works). |
@@ -84,7 +84,7 @@ What changes:
 - No `dnf` / `apt` install.
 - No `opts-file` merge into `/etc/<dbconf>` — custom my.cnf-style overlays are **ignored**.
 - Faster restart.
-- Supported with: `mysql`, `postgresql`, `psmdb` / `mongo`, `valkey`, `minio`, `pmm-server`, `pmm-client`.
+- Supported with: `mysql`, `postgresql`, `psmdb` / `mongo`, `valkey`, `clickhouse`, `minio`, `pmm-server`, `pmm-client`.
 
 ```sh
 # Bare flag — version is the tag

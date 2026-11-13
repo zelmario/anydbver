@@ -18,6 +18,9 @@
 | `percona-server-mongodb`  | `psmdb`                       | Percona Server for MongoDB                |
 | `mongodb`                 | `mongodb-community`           | MongoDB Community (repo.mongodb.org)      |
 | `valkey`                  |                               | Valkey (Redis fork)                       |
+| `clickhouse`              | `clickhouse-server`           | ClickHouse (packages.clickhouse.com)      |
+
+**`clickhouse`** installs from the official repository on EL 8/9/10, jammy, noble and bookworm, x86_64 and aarch64. Rows cover the LTS series from 25.3 and regular series from 26.4 (`anydbver versions clickhouse`). A node without `master=` runs a single-member ClickHouse Keeper; `master=nodeN` points a node at that Keeper. Every node joins the auto-discovered cluster `cluster1` (`cluster=` to rename, `shard=N` for more shards), so `ON CLUSTER` DDL and `ReplicatedMergeTree` work right away. Admin is `default` / `verysecretpassword1^`, and `clickhouse-client` on the node is preconfigured with it. `clickhouse:<ver>,docker-image` runs `clickhouse/clickhouse-server`.
 
 **`mongodb` takes the same options as `psmdb`** (`replica-set=`, `master=`, `role=shard|cfg`, `mongos-cfg:`/`mongos-shard:`, `user=`, `password=`, `docker-image`), installs from MongoDB's own yum repo on EL 8/9/10, x86_64 and aarch64, and covers 5.0 to 9.0, including 8.2 and 9.0 which Percona does not ship. Use it to compare the same version on Community and PSMDB (`psmdb:8.0.32` vs `mongodb:8.0.32`). LDAP and Kerberos are Enterprise features in MongoDB, so `ldap-server=`/`kerberos-server=` stay PSMDB-only. `mongodb:<ver>,docker-image` runs the official `mongo` image.
 
@@ -146,6 +149,7 @@ Defaults on 2026-10-20:
 | `ppg`           | 18.x          |
 | `psmdb`         | 8.0.x         |
 | `mongodb`       | 9.0.x         |
+| `clickhouse`    | 26.8.x (LTS)  |
 | `pbm`           | newest 2.x    |
 | `pmm-client`    | newest 3.x    |
 | `k8s-pg`        | 3.1.0         |

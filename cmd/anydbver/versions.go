@@ -38,6 +38,7 @@ var allowedVersionTables = map[string]bool{
 	"mydb_version":                   true,
 	"percona_server_mongodb_version": true,
 	"mongodb_version":                true,
+	"clickhouse_version":             true,
 	"percona_xtrabackup_version":     true,
 	"percona_backup_mongodb_version": true,
 	"general_version":                true,

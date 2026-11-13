@@ -1,0 +1,21 @@
+<clickhouse>
+  <!-- Written by anydbver. The password is stored as a SHA-256 hash. -->
+  <users>
+    <default>
+      <password remove="remove"/>
+      <password_sha256_hex>{{ db_password | hash('sha256') }}</password_sha256_hex>
+      <access_management>1</access_management>
+    </default>
+{% if clickhouse_user != 'default' %}
+    <{{ clickhouse_user }}>
+      <password_sha256_hex>{{ db_password | hash('sha256') }}</password_sha256_hex>
+      <networks>
+        <ip>::/0</ip>
+      </networks>
+      <profile>default</profile>
+      <quota>default</quota>
+      <access_management>1</access_management>
+    </{{ clickhouse_user }}>
+{% endif %}
+  </users>
+</clickhouse>

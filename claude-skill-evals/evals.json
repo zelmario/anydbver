@@ -237,6 +237,19 @@
         "Verification with pgbackrest info --stanza=db inside the pgbackrest-dedicated repo host pod, and kubectl get svc for the LoadBalancer addresses",
         "Does NOT invent a backup= or schedule= option, and does NOT claim PMM works with Crunchy"
       ]
+    },
+    {
+      "id": "clickhouse-replicated-keeper",
+      "prompt": "I need a 3-node ClickHouse cluster with replication to test ReplicatedMergeTree and ON CLUSTER DDL. How do I set that up with anydbver?",
+      "expected_output": "One deploy command with clickhouse on node0 and clickhouse,master=node0 on node1 and node2, plus a check that creates a ReplicatedMergeTree table ON CLUSTER cluster1 and counts rows on another node.",
+      "expectations": [
+        "Uses the clickhouse keyword on three nodes, with master=node0 on node1 and node2",
+        "Explains that node0 runs ClickHouse Keeper and the other nodes use it",
+        "Uses cluster1 (the default cluster name) in ON CLUSTER, or sets cluster= explicitly and uses that name",
+        "Verifies with anydbver exec and clickhouse-client, without passing a password",
+        "Does NOT pass user=default",
+        "Does NOT claim the Keeper is a 3-member quorum"
+      ]
     }
   ]
 }

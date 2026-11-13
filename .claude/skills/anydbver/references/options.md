@@ -213,6 +213,22 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 | `sentinel`     | Run Valkey Sentinel on this node.                      |
 | `cluster=name` | Valkey cluster name.                                   |
 
+## ClickHouse
+
+| Option         | Meaning                                                |
+|----------------|--------------------------------------------------------|
+| `master=nodeN` | Use the ClickHouse Keeper on `nodeN` and join its cluster. A node without `master=` runs the Keeper. |
+| `cluster=name` | Cluster name for `ON CLUSTER` (default `cluster1`).    |
+| `shard=N`      | Shard number of this node (default `1`).               |
+| `user=name`    | Extra admin user. Without it, the built-in `default` user gets the password. Do not pass `user=default`: anydbver rewrites the value `default` to node0's IP. |
+| `password=...` | Admin password (default `verysecretpassword1^`).       |
+| `docker-image` | Run `clickhouse/clickhouse-server:<version>` instead of packages. |
+
+```sh
+anydbver deploy clickhouse:26.8 node1 clickhouse:26.8,master=node0 node2 clickhouse:26.8,master=node0
+echo 'clickhouse-client -q "select host_address, shard_num from system.clusters"' | anydbver exec node0
+```
+
 ## sysbench
 
 | Option                | Meaning                                             |

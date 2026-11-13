@@ -21,7 +21,7 @@ anydbver deploy pmm:docker-image=perconalab/pmm-server:dev-latest,port=12443 \
 anydbver deploy minio:docker-image  node1 pg pgbackrest:s3=node0
 ```
 
-**Supported with `docker-image`:** `mysql`, `postgresql`, `psmdb` / `mongo`, `valkey`, `minio`, `pmm-server`, `pmm-client`.
+**Supported with `docker-image`:** `mysql`, `postgresql`, `psmdb` / `mongo`, `valkey`, `clickhouse`, `minio`, `pmm-server`, `pmm-client`.
 
 **CPU limits.** `cpus=N` limits the container (the global `--cpus` is the default since v0.1.47), `cpuset=0-3` pins it to cores. Only `cpuset` shrinks the core count the processes see, so it is what reduces PMM's Go thread pools. PMM's nginx is capped at one worker per allowed CPU, 2 when unlimited, because `worker_processes auto` ignores both limits.
 

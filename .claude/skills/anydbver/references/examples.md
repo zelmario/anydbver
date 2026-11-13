@@ -183,6 +183,40 @@ anydbver deploy \
 
 For 3 shards see `MONGO.md` (15-node `cache:psmdb-X` form).
 
+## ClickHouse
+
+Standalone, newest LTS (26.8). `clickhouse-client` on the node is already logged in:
+
+```sh
+anydbver deploy clickhouse:26.8 os:el9
+anydbver exec node0 -- clickhouse-client -q "select version()"
+```
+
+Replicated cluster. node0 runs ClickHouse Keeper, node1 and node2 use it through `master=node0`, and every node joins cluster `cluster1`:
+
+```sh
+anydbver deploy \
+        clickhouse:26.8 \
+  node1 clickhouse:26.8,master=node0 \
+  node2 clickhouse:26.8,master=node0
+```
+
+Check it with a replicated table:
+
+```sh
+anydbver exec node0 -- clickhouse-client -q "create table t on cluster cluster1 (id UInt64) engine=ReplicatedMergeTree('/clickhouse/tables/{shard}/t','{replica}') order by id"
+anydbver exec node0 -- clickhouse-client -q "insert into t select number from numbers(1000)"
+anydbver exec node2 -- clickhouse-client -q "select count() from t"
+```
+
+Same topology with the official image instead of packages:
+
+```sh
+anydbver deploy clickhouse:26.8,docker-image node1 clickhouse:26.8,docker-image,master=node0
+```
+
+Add `user=dba` for an extra admin user. Never pass `user=default`: anydbver rewrites the value `default` to node0's IP. The cluster has one Keeper, so stopping node0 stops replication and `ON CLUSTER` DDL.
+
 ## Backups (pgbackrest, PBM, MinIO)
 
 ```sh

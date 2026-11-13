@@ -1,0 +1,18 @@
+---
+# vars file for clickhouse
+# Versions have four parts (26.8.36.3). "26.8" must not match 26.80, and the
+# newest patch wins: compare the first three parts as numbers, then the last
+# one by length and text.
+package_info: >
+  {{ lookup("theredgreek.sqlite.sqlite", path=playbook_dir+"/anydbver_version.db",
+    select="select * from clickhouse_version where (version = '"+ clickhouse_version +"' or version like '"+ clickhouse_version +".%') and os='"+ dist +"' and arch='"+ ansible_architecture +"' ORDER BY CAST(version AS INTEGER) DESC, CAST(SUBSTR(version, INSTR(version,'.')+1) AS INTEGER) DESC, CAST(SUBSTR(SUBSTR(version, INSTR(version,'.')+1), INSTR(SUBSTR(version, INSTR(version,'.')+1),'.')+1) AS INTEGER) DESC, LENGTH(version) DESC, version DESC LIMIT 1")
+  if clickhouse_version != ""
+  else "" }}
+
+clickhouse_node_ip: "{{ ansible_default_ipv4.address }}"
+# A node without a master runs the ClickHouse Keeper for its cluster.
+clickhouse_keeper_ip: "{{ master_ip if master_ip != '' else clickhouse_node_ip }}"
+# Empty means the built-in "default" user. The option cannot default to the
+# literal "default": anydbver rewrites any option value "default" to node0's
+# IP, the old alias from master=default.
+clickhouse_user: "{{ db_user if db_user != '' else 'default' }}"

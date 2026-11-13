@@ -1,0 +1,54 @@
+<clickhouse>
+  <!-- Written by anydbver. Peers reach this node by IP: the container
+       hostname does not resolve from the other containers. -->
+  <listen_host>0.0.0.0</listen_host>
+  <listen_host>::1</listen_host>
+  <!-- Containers often have IPv6 disabled: skip ::1 instead of failing. -->
+  <listen_try>1</listen_try>
+  <interserver_http_host>{{ clickhouse_node_ip }}</interserver_http_host>
+
+  <macros>
+    <cluster>{{ cluster_name | e }}</cluster>
+    <shard>{{ clickhouse_shard | e }}</shard>
+    <replica>{{ ansible_hostname }}</replica>
+  </macros>
+{% if master_ip == '' %}
+
+  <!-- This node has no master, so it runs the Keeper for the cluster. -->
+  <keeper_server>
+    <tcp_port>9181</tcp_port>
+    <server_id>1</server_id>
+    <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
+    <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
+    <raft_configuration>
+      <server>
+        <id>1</id>
+        <hostname>{{ clickhouse_node_ip }}</hostname>
+        <port>9234</port>
+      </server>
+    </raft_configuration>
+  </keeper_server>
+{% endif %}
+
+  <zookeeper>
+    <node>
+      <host>{{ clickhouse_keeper_ip }}</host>
+      <port>9181</port>
+    </node>
+  </zookeeper>
+
+  <!-- Every node registers itself in the Keeper, so the cluster grows as
+       replicas join and ON CLUSTER queries reach all of them. -->
+  <allow_experimental_cluster_discovery>1</allow_experimental_cluster_discovery>
+  <remote_servers>
+    <{{ cluster_name }}>
+      <discovery>
+        <path>/clickhouse/discovery/{{ cluster_name }}</path>
+        <my_hostname>{{ clickhouse_node_ip }}</my_hostname>
+        <shard>{{ clickhouse_shard | e }}</shard>
+        <user>{{ clickhouse_user | e }}</user>
+        <password>{{ db_password | e }}</password>
+      </discovery>
+    </{{ cluster_name }}>
+  </remote_servers>
+</clickhouse>

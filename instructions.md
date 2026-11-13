@@ -27,6 +27,7 @@ If you only read one section, read [Command Anatomy](#command-anatomy) and
    - [PostgreSQL HA with Patroni / repmgr / HAProxy](#postgresql-ha-with-patroni--repmgr--haproxy)
    - [PostgreSQL backups with Barman](#postgresql-backups-with-barman)
    - [MongoDB / PSMDB replica set](#mongodb--psmdb-replica-set)
+   - [ClickHouse](#clickhouse-1)
    - [MongoDB sharded cluster](#mongodb-sharded-cluster)
    - [Backups (pgbackrest, PBM, MinIO)](#backups-pgbackrest-pbm-minio)
    - [PMM (monitoring)](#pmm-monitoring)
@@ -170,6 +171,7 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `percona-server-mongodb`  | `psmdb`                      | Percona Server for MongoDB                |
 | `mongodb`                 | `mongodb-community`          | MongoDB Community 5.0 to 9.0 (same options as `psmdb`) |
 | `valkey`                  |                              | Valkey (Redis fork)                       |
+| `clickhouse`              | `clickhouse-server`          | ClickHouse, with a built-in ClickHouse Keeper for replicas |
 
 ### Replication / HA / proxies
 
@@ -415,6 +417,16 @@ the ones you will use most often.
 | `sentinel`  | Run Valkey Sentinel on this node                            |
 | `cluster=name` | Valkey cluster name                                      |
 
+### ClickHouse
+
+| Option         | Meaning                                                  |
+|----------------|----------------------------------------------------------|
+| `master=nodeN` | Join the cluster whose ClickHouse Keeper runs on `nodeN` |
+| `cluster=name` | Cluster name for `ON CLUSTER` queries (default `cluster1`) |
+| `shard=N`      | Shard number of this node (default `1`, all nodes are replicas) |
+| `user=name`    | Extra admin user. Without it, the built-in `default` user gets the password. Do not pass `user=default`, anydbver rewrites that value to node0's IP. |
+| `password=...` | Admin password (default `verysecretpassword1^`)          |
+
 ### sysbench
 
 | Option                | Meaning                                             |
@@ -582,6 +594,40 @@ anydbver deploy minio:docker-image \
 
 # PSMDB 8.0 authenticating against an LDAP server on node0
 anydbver deploy ldap node1 ldap-master:default psmdb:8.0
+```
+
+### ClickHouse
+
+Packages come from the official repository at packages.clickhouse.com, for
+EL 8/9/10, Ubuntu jammy/noble and Debian bookworm, x86_64 and aarch64. The
+version database covers the LTS series from 25.3 and the regular series from
+26.4. List them with `anydbver versions clickhouse`.
+
+A node without `master=` runs a single-member ClickHouse Keeper. Nodes with
+`master=nodeN` use that Keeper, and every node registers itself in the cluster
+(`cluster1` by default), so `ON CLUSTER` DDL and `ReplicatedMergeTree` tables
+work right after the deploy:
+
+```sh
+# Standalone ClickHouse 26.8 LTS on Rocky Linux 9
+anydbver deploy clickhouse:26.8 os:el9
+
+# Three replicas, Keeper on node0
+anydbver deploy clickhouse:26.8 \
+  node1 clickhouse:26.8,master=node0 \
+  node2 clickhouse:26.8,master=node0
+
+# Two shards with two replicas each
+anydbver deploy clickhouse:26.8 \
+  node1 clickhouse:26.8,master=node0 \
+  node2 clickhouse:26.8,master=node0,shard=2 \
+  node3 clickhouse:26.8,master=node0,shard=2
+```
+
+`clickhouse-client` on each node is already logged in as the admin user:
+
+```sh
+echo 'clickhouse-client -q "select * from system.clusters"' | anydbver exec node0
 ```
 
 ### MongoDB sharded cluster
@@ -1043,8 +1089,8 @@ anydbver deploy pmm:docker-image=perconalab/pmm-server:dev-latest,port=12443 \
   node2 pmm-client:docker-image=perconalab/pmm-client:dev-latest,server=node0,mysql=node1
 ```
 
-Supported with `docker-image`: MySQL, PostgreSQL, MongoDB, Valkey, MinIO,
-PMM, PMM client.
+Supported with `docker-image`: MySQL, PostgreSQL, MongoDB, Valkey,
+ClickHouse (`clickhouse/clickhouse-server`), MinIO, PMM, PMM client.
 
 ---
 

@@ -28,6 +28,8 @@
     psmdb_version: "{{ lookup('vars', 'extra_psmdb_version', default=lookup('env','PSMDB',default='') ) }}"
     s3sql: "{{ lookup('vars', 'extra_s3sql', default=lookup('env','S3SQL',default='') ) }}"
     mongo_org_version: "{{ lookup('vars', 'extra_mongo_org_version', default=lookup('env','MONGO_ORG',default='') ) }}"
+    clickhouse_version: "{{ lookup('vars', 'extra_clickhouse_version', default=lookup('env','CLICKHOUSE',default='') ) }}"
+    clickhouse_shard: "{{ lookup('vars', 'extra_clickhouse_shard', default=lookup('env','CLICKHOUSE_SHARD',default='1') ) }}"
     pbm_version: "{{ lookup('vars', 'extra_pbm_version', default=lookup('env','PBM',default='') ) }}"
     pbm_agent: "{{ lookup('vars', 'extra_pbm_agent', default=lookup('env','PBM_AGENT',default='') ) }}"
     pbm_s3: "{{ lookup('vars', 'extra_pbm_s3_url', default=lookup('env','PBM_S3',default='') ) }}"
@@ -220,6 +222,7 @@
       'mysql': mysql_version, 'mydb': mydb_version, 'mariadb': mariadb_version,
       'postgresql': postgresql_version, 'percona-postgresql': percona_postgresql_version,
       'psmdb': psmdb_version, 'mongodb': mongo_org_version,
+      'clickhouse': clickhouse_version,
       'valkey': vites_version, 'pmm-client': pmm_client_version,
       'pbm': pbm_version, 'percona-xtrabackup': percona_xtrabackup_version,
       'patroni': patroni_version, 'repmgr': repmgr_version, 'pgbouncer': pgbouncer,
@@ -376,6 +379,11 @@
       when: psmdb_version != '' or pbm_version != '' or pbm_agent != '' or mongo_org_version != ''
       include_role:
         name: mongodb
+
+    - name: ClickHouse Role
+      when: clickhouse_version != ''
+      include_role:
+        name: clickhouse
 
     - name: MySQL Role
       when: >

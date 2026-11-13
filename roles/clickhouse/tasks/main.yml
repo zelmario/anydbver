@@ -1,0 +1,111 @@
+---
+# tasks file for clickhouse
+- name: Fail when the version database has no ClickHouse row for this node
+  when: package_info == '' or package_info is not mapping
+  fail:
+    msg: >-
+      No ClickHouse {{ clickhouse_version }} package for {{ dist }} {{ ansible_architecture }}
+      in the version database. List the available versions with 'anydbver versions clickhouse'.
+
+- name: Enable the ClickHouse yum repository
+  when: ansible_os_family == 'RedHat'
+  copy:
+    dest: "{{ package_info['repo_file'] }}"
+    content: |
+      [clickhouse-{{ package_info['repo_enable_str'] }}]
+      name=ClickHouse {{ package_info['repo_enable_str'] }}
+      baseurl={{ package_info['repo_url'] }}
+      gpgcheck=0
+      enabled=1
+
+- name: Enable the ClickHouse apt repository
+  when: ansible_os_family == 'Debian'
+  block:
+    - name: Install apt prerequisites for the ClickHouse repository
+      apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+        update_cache: yes
+    - name: Add the ClickHouse apt source
+      copy:
+        dest: "{{ package_info['repo_file'] }}"
+        content: |
+          deb [trusted=yes] {{ package_info['repo_url'] }} {{ package_info['repo_enable_str'] }} main
+    - name: Refresh apt after adding the ClickHouse source
+      apt:
+        update_cache: yes
+
+# One transaction for all packages: clickhouse-server requires the exact
+# clickhouse-common-static version, and per-package installs reload the
+# repository metadata each time.
+- name: Install ClickHouse
+  package:
+    name: "{{ package_info['packages'].split('|') }}"
+    state: present
+
+- name: Configure ClickHouse server
+  template:
+    src: anydbver-config.xml.j2
+    dest: /etc/clickhouse-server/config.d/anydbver.xml
+    owner: clickhouse
+    group: clickhouse
+    mode: '0640'
+
+- name: Configure ClickHouse users
+  template:
+    src: anydbver-users.xml.j2
+    dest: /etc/clickhouse-server/users.d/anydbver.xml
+    owner: clickhouse
+    group: clickhouse
+    mode: '0640'
+
+# The deb postinst can leave a password file for "default" from debconf,
+# which would conflict with the one set by anydbver.
+- name: Remove the packaged default password
+  file:
+    path: /etc/clickhouse-server/users.d/default-password.xml
+    state: absent
+
+- name: Configure clickhouse-client for root
+  block:
+    - name: Create the clickhouse-client config directory
+      file:
+        path: /root/.clickhouse-client
+        state: directory
+        mode: '0700'
+    - name: Store clickhouse-client credentials
+      copy:
+        dest: /root/.clickhouse-client/config.xml
+        mode: '0600'
+        content: |
+          <config>
+            <user>{{ clickhouse_user | e }}</user>
+            <password>{{ db_password | e }}</password>
+          </config>
+
+- name: Start ClickHouse
+  systemd:
+    name: "{{ package_info['systemd_service'] }}"
+    state: restarted
+    enabled: yes
+
+- name: Wait for ClickHouse to accept queries
+  command: clickhouse-client -q "select 1"
+  register: clickhouse_ready
+  until: clickhouse_ready.rc == 0
+  retries: 60
+  delay: 2
+  changed_when: false
+
+# A replica needs the Keeper on its master before ON CLUSTER queries and
+# replicated tables work. Wait for it, so the deploy fails here and not at
+# the user's first query.
+- name: Wait for the ClickHouse Keeper on the master
+  when: master_ip != ''
+  command: clickhouse-client -q "select count() from system.zookeeper where path = '/'"
+  register: clickhouse_keeper_ready
+  until: clickhouse_keeper_ready.rc == 0
+  retries: 60
+  delay: 5
+  changed_when: false
