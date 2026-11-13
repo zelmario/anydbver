@@ -116,6 +116,12 @@ anydbver deploy \
 
 **Cache cleanup.** `anydbver destroy --remove-cache` wipes cache images alongside containers. Cache images live as Docker images (`docker image ls | grep anydbver-cache`).
 
+## Shared dnf metadata (automatic, EL nodes)
+
+Since the next release after v0.1.47, anydbver runs `dnf makecache` once per EL version (el8, el9, el10) before it creates containers, and every node copies that result instead of parsing BaseOS, AppStream and EPEL metadata itself. The seed lives in `~/.cache/anydbver/data/dnf-seed/` and is reused for 6 hours. You see `Refreshing dnf metadata for el8 once...` at the start of a deploy when it refreshes.
+
+Measured on 8 cores: a 3-node PSMDB replica set went from 270 s to 167 s, and a 10-node sharded cluster finishes in about 8 minutes instead of hitting the playbook timeout. The playbook timeout also grows by 4 minutes per node over 3. Turn the seed off with `ANYDBVER_NO_DNF_SEED=1` if you suspect stale metadata.
+
 ## Optional: nginx package proxy cache
 
 For deploys on a slow internet connection, you can run a local nginx proxy that caches Percona / MariaDB package downloads. Per CACHING.md:

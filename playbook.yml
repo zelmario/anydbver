@@ -252,6 +252,15 @@
       when: dist == 'el7'
       shell:
         cmd: "sed -i -e 's/mirror.centos.org/vault.centos.org/g' -e 's/^#.*baseurl=http/baseurl=http/g' -e 's/^mirrorlist=http/#mirrorlist=http/g'   /etc/yum.repos.d/CentOS-*.repo"
+    - name: Reuse the dnf metadata anydbver refreshed once on the host
+      when: dist in ['el8', 'el9', 'el10']
+      shell:
+        cmd: |
+          seed=/var/cache/anydbver-dnf-seed/{{ dist }}-{{ ansible_architecture }}
+          test -f "$seed/.anydbver-seed" || exit 0
+          cp -a "$seed"/. /var/cache/dnf/
+          touch /var/cache/dnf/.anydbver-seeded
+        creates: /var/cache/dnf/.anydbver-seeded
     - name: vagrant compat
       package:
         name: sudo

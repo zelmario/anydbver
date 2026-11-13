@@ -140,3 +140,20 @@ After making an image you can omit all keywords in deployment except for cache:n
   node0 k8s-pxc
 ```
 Both k3s-master and k3s-worker caches could be used for all operators, not only for Percona Operator for PXC.
+
+## Shared dnf metadata for EL nodes
+Every EL node used to download and parse the BaseOS, AppStream, extras and EPEL metadata on its own, about 48 s of CPU-bound work per node. On an 8-core machine a 10-node sharded cluster spent 7 minutes there and then hit the playbook timeout.
+
+anydbver now runs `dnf makecache` once per EL version (el8, el9, el10) and architecture, before it creates the containers. The result lives in `~/.cache/anydbver/data/dnf-seed/` and is reused for 6 hours. Each node gets the directory read-only and copies it into its own `/var/cache/dnf`, so the first dnf call on a node takes about a second.
+
+Measured on an 8-core WSL2 host, PSMDB 8.0 on el8:
+
+| Deployment | Before | Seed refreshed | Seed reused |
+|---|---|---|---|
+| 3-node replica set | 270 s | 200 s | 167 s |
+| 10-node sharded cluster | failed at 20 min timeout | | 487 s |
+
+The seed is not reused for longer because EPEL removes superseded packages daily, and stale metadata can point at RPMs that are gone. To turn it off:
+```
+export ANYDBVER_NO_DNF_SEED=1
+```

@@ -31,9 +31,8 @@
 - name: install Percona Server for MongoDB
   when: psmdb_version != '' and not ( psmdb_version.startswith('3.2') or psmdb_version.startswith('3.4') )
   package:
-    name: "{{ item }}"
+    name: "{{ package_info['packages'].split('|') }}"
     state: present
-  with_items: "{{package_info['packages'].split('|')}}"
 
 - name: install Percona Server for MongoDB 3.2 or 3.4
   when: psmdb_version.startswith('3.2') or psmdb_version.startswith('3.4')

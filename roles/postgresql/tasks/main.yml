@@ -124,9 +124,8 @@
 - name: install Postgres
   when: percona_postgresql_version != '' or postgresql_version != ''
   package:
-    name: "{{ item }}"
+    name: "{{ package_info['packages'].split('|') }}"
     state: present
-  with_items: "{{package_info['packages'].split('|')}}"
 
 - name: install Percona Distribution for PostgreSQL (deb)
   when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and percona_postgresql_version != ''

@@ -775,6 +775,7 @@ func createContainer(logger *log.Logger, config ContainerConfig) {
 		"-v", "/sys/fs/cgroup:/sys/fs/cgroup",
 		"--hostname", name,
 	}
+	args = append(args, dnfSeedVolume(logger, osver)...)
 	if config.Memory != "" {
 		args = append(args, "--memory="+config.Memory)
 	}
@@ -1704,7 +1705,7 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 	env := map[string]string{}
 	errMsg := "Error running Ansible"
 	ignoreMsg := regexp.MustCompile("ignore this")
-	ansible_output, err := runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, 1200)
+	ansible_output, err := runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, playbookTimeout(ansible_hosts_run_file))
 	if err != nil {
 		logger.Println("Ansible failed with errors: ")
 		fatalPattern := regexp.MustCompile(`FAILED[!]|failed=`)
@@ -1725,6 +1726,27 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 		}
 		os.Exit(runtools.ANYDBVER_ANSIBLE_PROBLEM)
 	}
+}
+
+// playbookTimeout gives the playbook 20 minutes for up to 3 nodes and 4 more
+// minutes per extra node. Nodes install in parallel but share the CPU, so a
+// fixed 20 minutes failed 10-node sharded clusters on an 8-core machine.
+func playbookTimeout(ansible_hosts_run_file string) int {
+	timeout := 1200
+	data, err := os.ReadFile(ansible_hosts_run_file)
+	if err != nil {
+		return timeout
+	}
+	nodes := 0
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) != "" {
+			nodes++
+		}
+	}
+	if nodes > 3 {
+		timeout += 240 * (nodes - 3)
+	}
+	return timeout
 }
 
 func createK3dCluster(logger *log.Logger, namespace string, name string, args map[string]string) {
@@ -2341,6 +2363,7 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 			containers = append(containers, ContainerConfig{Name: node, Provider: "docker-image", Namespace: namespace, Keep: keep})
 		}
 	}
+	seedDnfMetadata(logger, containers)
 	createNamespace(logger, containers, namespace)
 	var nodeIdxs []int
 	for k := range nodeDefinitions {
