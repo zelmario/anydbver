@@ -633,6 +633,21 @@ EL 8/9/10, Ubuntu jammy/noble and Debian bookworm, x86_64 and aarch64. The
 version database covers the LTS series from 25.3 and the regular series from
 26.4. List them with `anydbver versions clickhouse`.
 
+Choose the version the same way as for the other databases. A series picks
+its newest patch, a full version pins it, and no version deploys the newest
+LTS (26.8):
+
+```sh
+anydbver versions clickhouse                 # every version, newest first
+anydbver deploy clickhouse                   # 26.8 LTS, newest patch
+anydbver deploy clickhouse:25.3 os:el8       # oldest series, newest 25.3 patch
+anydbver deploy clickhouse:26.9.20.23        # exactly this build
+```
+
+The series in the version database: 25.3, 25.8, 26.3 and 26.8 (LTS) and
+26.4 to 26.10. With `docker-image`, the version is the
+`clickhouse/clickhouse-server` image tag.
+
 A node without `master=` runs a single-member ClickHouse Keeper. Nodes with
 `master=nodeN` use that Keeper, and every node registers itself in the cluster
 (`cluster1` by default), so `ON CLUSTER` DDL and `ReplicatedMergeTree` tables
@@ -653,6 +668,12 @@ anydbver deploy clickhouse:26.8 \
   node2 clickhouse:26.8,master=node0,shard=2 \
   node3 clickhouse:26.8,master=node0,shard=2
 ```
+
+**Known issue in v0.1.48:** the cluster comes from ClickHouse cluster
+discovery, which always sets `internal_replication` to false. A `Distributed`
+table over `ReplicatedMergeTree` then writes every row to each replica and
+stores it twice. Insert into the local `ReplicatedMergeTree` table on each
+shard instead, or read with `Distributed` only.
 
 `clickhouse-client` on each node is already logged in as the admin user:
 
