@@ -110,9 +110,14 @@
     line: "deb https://apt-archive.postgresql.org/pub/repos/apt {{dist}}-pgdg-archive main"
 - name: Add postgres.org Apt repo (PGDG)
   when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and postgresql_version != '' and package_info['repo_file'] != '' and package_info['repo_enable_str'] != ''
+  # The rows name /etc/apt/sources.d/, which apt never reads, so the main
+  # PGDG repo was silently off and only the archive above was used. The
+  # archive gets a new minor release days late, so pg:18 failed with "no
+  # installation candidate" right after a release. Keep the file name, use
+  # the directory apt reads.
   lineinfile:
     create: yes
-    path: "{{ package_info['repo_file'] }}"
+    path: "/etc/apt/sources.list.d/{{ package_info['repo_file'] | basename }}"
     line: "{{ package_info['repo_enable_str'] }}"
 
 - name: refresh apt repo
