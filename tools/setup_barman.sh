@@ -16,9 +16,27 @@ if [[ "$HOSTNAME" == "" ]]; then
   exit 1
 fi
 
+# .pgpass escapes ":" and "\\" with a backslash.
+PGPASS_LINE="*:*:*:$USER:$(printf '%s' "$PASSWORD" | sed -e 's/[\\:]/\\&/g')"
+
 wait_pg_ready() {
+  # With PMM, initdb runs with -A md5, so local connections need a password
+  # and "sudo -u postgres psql" never succeeded: this loop waited forever
+  # and the deploy hit the playbook timeout. Give the postgres OS user a
+  # .pgpass once the user exists; it also covers the psql calls in
+  # enable_archiving and switch_wal. -w never prompts for a password.
+  # The rpm creates the postgres user before its home directory, so write
+  # the file inside the retry loop instead of once up front.
   $SSH "$PG_SERVER" <<EOF
-until sudo -u postgres psql -c "SELECT 1"; do
+until
+  PGHOME=\$(getent passwd postgres | cut -d: -f6)
+  if [ -n "\$PGHOME" ] && [ -d "\$PGHOME" ] && ! grep -qxF '$PGPASS_LINE' "\$PGHOME/.pgpass" 2>/dev/null; then
+    echo '$PGPASS_LINE' >> "\$PGHOME/.pgpass"
+    chown postgres:postgres "\$PGHOME/.pgpass"
+    chmod 0600 "\$PGHOME/.pgpass"
+  fi
+  sudo -u postgres psql -w -c "SELECT 1" >/dev/null 2>&1
+do
   sleep 1
 done
 EOF
@@ -111,7 +129,9 @@ else
   setup_barman_to_pg_ssh_key
   setup_pg_to_barman_ssh_key
   install_barman_cli_on_pg
-  enable_archiving "barman-wal-archive --md5 -U barman $BARMAN_SERVER $HOSTNAME %p"
+  # No --md5: barman-cli 3.10 removed the option and rejects the whole
+  # command, so every WAL segment failed to archive.
+  enable_archiving "barman-wal-archive -U barman $BARMAN_SERVER $HOSTNAME %p"
   switch_wal
 fi
 
