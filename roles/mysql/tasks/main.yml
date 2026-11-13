@@ -57,15 +57,29 @@
         name: "{{package_info['repo_url']}}"
         disable_gpg_check: yes
         state: present
-    - name: Enable the mysql repo the requested version lives in
-      # Oracle ships every release stream in its own repo and the release rpm
-      # leaves all but 8.0 disabled, so the version row names the repo to turn
-      # on. Without this, asking for 9.x silently gets you 8.0.
+    - name: Install dnf config-manager for the mysql repo switch
+      # The el9 base image does not ship dnf-plugins-core.
+      when: >
+        mysql_version != '' and package_info and package_info['repo_enable_str'] != '' and
+        (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
+      package:
+        name: dnf-plugins-core
+        state: present
+    - name: Enable only the mysql repo the requested version lives in
+      # Oracle ships every release stream in its own repo, and which one a
+      # release rpm enables by default changes over time: the current
+      # mysql84-community-release enables 9.7 LTS, not 8.4. The version row
+      # names the repo, so turn every server stream off and that one on.
+      # Without this, mysql:8.4 finds no 8.4 packages and mysql:9.x gets 8.0.
       when: >
         mysql_version != '' and package_info and package_info['repo_enable_str'] != '' and
         (ansible_distribution == 'CentOS' or ansible_distribution == 'Rocky' or ansible_distribution == 'Red Hat Enterprise Linux' or ansible_distribution == 'OracleLinux')
       shell:
-        cmd: "dnf config-manager --disable mysql80-community; dnf config-manager --enable {{package_info['repo_enable_str']}}"
+        cmd: |
+          set -e
+          streams=$(sed -n 's/^\[\(.*\)\]$/\1/p' /etc/yum.repos.d/mysql-community*.repo | grep -xE 'mysql[0-9]+-community|mysql-[0-9.]+-(lts-)?community|mysql-innovation-community' || true)
+          if [ -n "$streams" ]; then dnf config-manager --set-disabled $streams; fi
+          dnf config-manager --set-enabled {{package_info['repo_enable_str']}}
     - name: Enable mysql innovation releases
       when: >
         ( mysql_version.startswith('8.1') or mysql_version.startswith('8.2') or mysql_version.startswith('8.3') ) and
