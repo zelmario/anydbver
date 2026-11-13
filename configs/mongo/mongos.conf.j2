@@ -4,7 +4,10 @@ systemLog:
   path: {{ mongos_log }}
 processManagement:
   fork: true
-  pidFilePath: /var/run/mongod.pid
+  # mongos has its own runtime directory. PSMDB 8.0.32 ships a mongod.conf
+  # without pidFilePath, so its helper no longer creates /var/run/mongod.pid
+  # and mongos could not write it as the mongod user.
+  pidFilePath: /run/mongos/mongos.pid
 sharding:
   configDB: {{ mongos_cfg.split(',') | join(':27017,') + ':27017' if ':' not in mongos_cfg.split('/', 1)[1] else mongos_cfg }}
 security:

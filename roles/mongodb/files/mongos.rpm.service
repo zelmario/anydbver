@@ -15,7 +15,8 @@ LimitNPROC=64000
 EnvironmentFile=-/etc/sysconfig/mongos
 ExecStartPre=+/usr/bin/percona-server-mongodb-helper.sh
 ExecStart=/usr/bin/env bash -c "/usr/bin/mongos ${OPTIONS} > ${STDOUT} 2> ${STDERR}"
-PIDFile=/var/run/mongod.pid
+RuntimeDirectory=mongos
+PIDFile=/run/mongos/mongos.pid
 
 [Install]
 WantedBy=multi-user.target
