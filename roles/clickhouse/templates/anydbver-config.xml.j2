@@ -12,43 +12,53 @@
     <shard>{{ clickhouse_shard | e }}</shard>
     <replica>{{ ansible_hostname }}</replica>
   </macros>
-{% if master_ip == '' %}
+{% for k in clickhouse_keepers if k.ip == clickhouse_node_ip %}
 
-  <!-- This node has no master, so it runs the Keeper for the cluster. -->
+  <!-- This node is Keeper member {{ clickhouse_keepers.index(k) + 1 }} of {{ clickhouse_keepers | length }}. -->
   <keeper_server>
     <tcp_port>9181</tcp_port>
-    <server_id>1</server_id>
+    <server_id>{{ clickhouse_keepers.index(k) + 1 }}</server_id>
     <log_storage_path>/var/lib/clickhouse/coordination/log</log_storage_path>
     <snapshot_storage_path>/var/lib/clickhouse/coordination/snapshots</snapshot_storage_path>
     <raft_configuration>
+{% for m in clickhouse_keepers %}
       <server>
-        <id>1</id>
-        <hostname>{{ clickhouse_node_ip }}</hostname>
+        <id>{{ loop.index }}</id>
+        <hostname>{{ m.ip }}</hostname>
         <port>9234</port>
       </server>
+{% endfor %}
     </raft_configuration>
   </keeper_server>
-{% endif %}
+{% endfor %}
 
   <zookeeper>
+{% for m in clickhouse_keepers %}
     <node>
-      <host>{{ clickhouse_keeper_ip }}</host>
+      <host>{{ m.ip }}</host>
       <port>9181</port>
     </node>
+{% endfor %}
   </zookeeper>
 
-  <!-- Every node registers itself in the Keeper, so the cluster grows as
-       replicas join and ON CLUSTER queries reach all of them. -->
-  <allow_experimental_cluster_discovery>1</allow_experimental_cluster_discovery>
+  <!-- Every ClickHouse node sharing this Keeper, grouped by shard.
+       internal_replication: a Distributed table writes each row to one
+       replica and ReplicatedMergeTree copies it to the others. -->
   <remote_servers>
     <{{ cluster_name }}>
-      <discovery>
-        <path>/clickhouse/discovery/{{ cluster_name }}</path>
-        <my_hostname>{{ clickhouse_node_ip }}</my_hostname>
-        <shard>{{ clickhouse_shard | e }}</shard>
-        <user>{{ clickhouse_user | e }}</user>
-        <password>{{ db_password | e }}</password>
-      </discovery>
+{% for shard, replicas in clickhouse_members | groupby('shard') %}
+      <shard>
+        <internal_replication>true</internal_replication>
+{% for r in replicas %}
+        <replica>
+          <host>{{ r.ip }}</host>
+          <port>9000</port>
+          <user>{{ clickhouse_user | e }}</user>
+          <password>{{ db_password | e }}</password>
+        </replica>
+{% endfor %}
+      </shard>
+{% endfor %}
     </{{ cluster_name }}>
   </remote_servers>
 </clickhouse>

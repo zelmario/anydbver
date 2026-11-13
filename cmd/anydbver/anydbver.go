@@ -2426,11 +2426,32 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 
 	}
 	sort.Ints(nodeIdxs)
+	// ClickHouse nodes list their whole cluster in their config, so record
+	// every docker-image ClickHouse node before creating any of them.
+	clickHouseNodes := []unmodified_docker.ClickHouseNode{}
+	for _, k := range nodeIdxs {
+		nodeName := fmt.Sprintf("node%d", k)
+		if nodeProvider[nodeName] != "docker-image" {
+			continue
+		}
+		for _, arg := range nodeDefinitions[nodeName] {
+			kw := ParseDeploymentKeyword(logger, arg)
+			if _, ok := kw.Args["docker-image"]; ok && kw.Cmd == "clickhouse" {
+				shard, err := strconv.Atoi(kw.Args["shard"])
+				if err != nil || shard < 1 {
+					shard = 1
+				}
+				clickHouseNodes = append(clickHouseNodes, unmodified_docker.ClickHouseNode{Name: nodeName, Master: kw.Args["master"], Shard: shard})
+			}
+		}
+	}
+	unmodified_docker.SetClickHouseTopology(clickHouseNodes)
 	for _, k := range nodeIdxs {
 		nodeName := fmt.Sprintf("node%d", k)
 		nodeDef := nodeDefinitions[nodeName]
 		deployHost(nodeProvider[nodeName], logger, namespace, nodeName, ansible_hosts_run_file, nodeDef, keep, cpus)
 	}
+	unmodified_docker.WaitClickHouse(logger, namespace)
 
 	for _, k := range nodeIdxs {
 		nodeName := fmt.Sprintf("node%d", k)

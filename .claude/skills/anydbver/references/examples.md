@@ -222,15 +222,13 @@ anydbver exec node2 -- clickhouse-client -q "select count() from t"
 
 Pick a version like any other keyword: `clickhouse` (26.8 LTS), `clickhouse:25.3` (newest 25.3 patch), `clickhouse:26.9.20.23` (exact build). `anydbver versions clickhouse` lists them; series are 25.3, 25.8, 26.3, 26.8 (LTS) and 26.4 to 26.10.
 
-Known issue in v0.1.48: with `shard=`, a `Distributed` table over `ReplicatedMergeTree` stores every row once per replica (cluster discovery forces `internal_replication` off). Insert into the local table per shard instead.
-
 Same topology with the official image instead of packages:
 
 ```sh
 anydbver deploy clickhouse:26.8,docker-image node1 clickhouse:26.8,docker-image,master=node0
 ```
 
-Add `user=dba` for an extra admin user. Never pass `user=default`: anydbver rewrites the value `default` to node0's IP. The cluster has one Keeper, so stopping node0 stops replication and `ON CLUSTER` DDL.
+Add `user=dba` for an extra admin user. Never pass `user=default`: anydbver rewrites the value `default` to node0's IP. With 3+ nodes the root and the next two nodes run a 3-member Keeper (v0.1.49+), so one node can stop without stopping replication. `remote_servers` is a static list with `internal_replication` on, so `Distributed` over `ReplicatedMergeTree` stores each row once per shard.
 
 ## Backups (pgbackrest, PBM, MinIO)
 

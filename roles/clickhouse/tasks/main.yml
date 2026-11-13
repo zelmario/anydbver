@@ -44,6 +44,37 @@
     name: "{{ package_info['packages'].split('|') }}"
     state: present
 
+# Cluster discovery always builds clusters with internal_replication off, so
+# a Distributed table over ReplicatedMergeTree wrote every row to each replica
+# and stored it twice. Build the cluster from the inventory instead: every
+# ClickHouse node that shares this node's Keeper root (its master, or itself)
+# is a member. Sort by node number, not IP, so every node computes the same
+# list: containers are not created in node order.
+- name: ClickHouse cluster members from the inventory
+  set_fact:
+    clickhouse_members: >-
+      {%- set out = [] -%}
+      {%- for h in groups['all'] -%}
+        {%- set hv = hostvars[h] -%}
+        {%- if (hv.extra_clickhouse_version | default('')) != '' -%}
+          {%- set m = hv.extra_master_ip | default('') -%}
+          {%- set _ = out.append({'num': (h | regex_replace('^.*node', '') | int),
+                                  'ip': hv.ansible_host,
+                                  'root': (m if m != '' else hv.ansible_host),
+                                  'shard': (hv.extra_clickhouse_shard | default('1') | int)}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out | selectattr('root', 'equalto', clickhouse_keeper_ip) | sort(attribute='num') | list }}
+
+# Three Keepers when the cluster has three nodes or more: the root and the
+# next two members. One Keeper otherwise, a 2-member Raft group is worse.
+- name: ClickHouse Keeper members
+  set_fact:
+    clickhouse_keepers: >-
+      {{ (clickhouse_members | selectattr('ip', 'equalto', clickhouse_keeper_ip) | list)
+         + ((clickhouse_members | rejectattr('ip', 'equalto', clickhouse_keeper_ip) | list)[:2]
+            if clickhouse_members | length >= 3 else []) }}
+
 - name: Configure ClickHouse server
   template:
     src: anydbver-config.xml.j2
@@ -98,11 +129,9 @@
   delay: 2
   changed_when: false
 
-# A replica needs the Keeper on its master before ON CLUSTER queries and
-# replicated tables work. Wait for it, so the deploy fails here and not at
-# the user's first query.
-- name: Wait for the ClickHouse Keeper on the master
-  when: master_ip != ''
+# Replicated tables and ON CLUSTER queries need a Keeper quorum. Wait for it
+# on every node, so the deploy fails here and not at the user's first query.
+- name: Wait for the ClickHouse Keeper quorum
   command: clickhouse-client -q "select count() from system.zookeeper where path = '/'"
   register: clickhouse_keeper_ready
   until: clickhouse_keeper_ready.rc == 0

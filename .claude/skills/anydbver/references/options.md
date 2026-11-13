@@ -223,7 +223,7 @@ Reference from clients with `s3=nodeN[/<bucket>]`.
 
 | Option         | Meaning                                                |
 |----------------|--------------------------------------------------------|
-| `master=nodeN` | Use the ClickHouse Keeper on `nodeN` and join its cluster. A node without `master=` runs the Keeper. |
+| `master=nodeN` | Join the cluster whose root is `nodeN`. The root runs Keeper; with 3+ nodes the next two nodes join a 3-member Keeper. |
 | `cluster=name` | Cluster name for `ON CLUSTER` (default `cluster1`).    |
 | `shard=N`      | Shard number of this node (default `1`).               |
 | `user=name`    | Extra admin user. Without it, the built-in `default` user gets the password. Do not pass `user=default`: anydbver rewrites the value `default` to node0's IP. |

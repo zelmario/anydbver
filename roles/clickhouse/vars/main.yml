@@ -9,7 +9,8 @@ package_info: >
   if clickhouse_version != ""
   else "" }}
 
-clickhouse_node_ip: "{{ ansible_default_ipv4.address }}"
+# The inventory address: the same value the other nodes see in hostvars.
+clickhouse_node_ip: "{{ ansible_host }}"
 # A node without a master runs the ClickHouse Keeper for its cluster.
 clickhouse_keeper_ip: "{{ master_ip if master_ip != '' else clickhouse_node_ip }}"
 # Empty means the built-in "default" user. The option cannot default to the
