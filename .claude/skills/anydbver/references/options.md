@@ -75,6 +75,11 @@ Inherits all MySQL options above. Cluster-specific:
 - **`mongos-shard:` only on the first mongos.** Additional mongos nodes get `mongos-cfg:` only.
 - **`replica-set=` vs `replica-set:`** — both forms work; the equals form is the modern convention.
 
+**mongot (vector search).** `mongot` (alias of `percona-search-mongodb`) is a separate keyword on the same node as psmdb, with no options besides the version (`mongot:1.70`, `mongot:1.70.4`). It needs `psmdb:8.3+` with `replica-set=`, el8 or el9, and goes on every replica set member. User `mongot` (role `searchCoordinator`) gets the psmdb `password=`. No `docker-image` mode, no sharded clusters. Verify:
+```sh
+anydbver exec node0 -- curl -s localhost:8080/health    # {"status":"SERVING"}
+```
+
 ## Backups
 
 | Option                                       | Meaning                                             |

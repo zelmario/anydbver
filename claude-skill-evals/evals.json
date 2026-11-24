@@ -262,6 +262,19 @@
         "Shows CREATE TABLE ... USING tde_heap and pg_tde_is_encrypted to verify",
         "Does NOT combine tde with master= (replicas are not supported)"
       ]
+    },
+    {
+      "id": "psmdb-mongot-vector-search",
+      "prompt": "I want to try MongoDB vector search ($vectorSearch) on Percona Server for MongoDB, with a 3-node replica set. How do I set that up with anydbver?",
+      "expected_output": "One deploy command with psmdb:8.3,replica-set=rs0 plus mongot on node0, and psmdb:8.3,replica-set=rs0,master=node0 plus mongot on node1 and node2, on el9 or el8, plus a check with curl localhost:8080/health or createSearchIndex and $vectorSearch.",
+      "expectations": [
+        "Uses psmdb 8.3 or later, not 8.0",
+        "Uses replica-set= on every node and master=node0 on the secondaries",
+        "Adds the mongot (or percona-search-mongodb) keyword on every node",
+        "Uses os:el9 or os:el8, or leaves the default OS, and does NOT use el10 or Ubuntu",
+        "Does NOT use docker-image for mongot",
+        "Verifies with curl localhost:8080/health, or with createSearchIndex and a $vectorSearch query"
+      ]
     }
   ]
 }

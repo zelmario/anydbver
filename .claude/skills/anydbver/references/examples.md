@@ -162,6 +162,13 @@ anydbver deploy minio:docker-image \
 
 # PSMDB with LDAP auth
 anydbver deploy ldap node1 ldap-master:default psmdb:8.0
+
+# Vector search: PSMDB 8.3 replica set with mongot on every member
+anydbver deploy \
+  node0 os:el9 psmdb:8.3,replica-set=rs0 mongot \
+  node1 os:el9 psmdb:8.3,replica-set=rs0,master=node0 mongot \
+  node2 os:el9 psmdb:8.3,replica-set=rs0,master=node0 mongot
+# verify: anydbver exec node0 -- curl -s localhost:8080/health
 ```
 
 <a id="mongodb-sharded"></a>

@@ -77,3 +77,16 @@ percona_backup_mongodb_ver: >
   {{ percona_backup_mongodb_info['version'] + '.' + percona_backup_mongodb_info['os'] + '.' + ansible_architecture
   if percona_backup_mongodb_info
   else "" }}
+
+# Percona Search for MongoDB (mongot). Rows live in general_version; pick the
+# newest build that matches the requested prefix (1.70 -> 1.70.5-3).
+mongot_info: >
+  {{ lookup("theredgreek.sqlite.sqlite", path=playbook_dir+"/anydbver_version.db",
+    select="select version, os from general_version where program='percona-search-mongodb' and version like '"+ mongot_version +"%' and os='"+ dist +"' and arch='"+ansible_architecture +"' ORDER BY CAST(SUBSTR(version,1,INSTR(version,'.')-1) as integer) DESC, CAST(SUBSTR(version,INSTR(version,'.')+1, INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')-1 ) AS INTEGER) DESC, CAST( SUBSTR(version, INSTR(version,'.')+1+ INSTR(SUBSTR(version,INSTR(version,'.')+1),'.')  ) AS INTEGER) DESC, CAST(SUBSTR(version, INSTR(version,'-')+1) AS INTEGER) DESC, version DESC LIMIT 1")
+  if mongot_version != ""
+  else "" }}
+
+mongot_package: >-
+  {{ 'percona-search-mongodb-' + mongot_info['version'] + '.' + mongot_info['os'] + '.' + ansible_architecture
+  if mongot_info
+  else '' }}

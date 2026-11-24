@@ -2842,6 +2842,7 @@ INSERT INTO tests VALUES(55,'crunchy postgres exposed with a load balancer','any
 INSERT INTO tests VALUES(56,'clickhouse standalone','anydbver deploy clickhouse:26.8 os:el9');
 INSERT INTO tests VALUES(57,'clickhouse 3 replicas with keeper','anydbver deploy clickhouse:26.8 node1 clickhouse:26.8,master=node0 node2 clickhouse:26.8,master=node0');
 INSERT INTO tests VALUES(58,'clickhouse docker image replicas','anydbver deploy clickhouse:26.8,docker-image node1 clickhouse:26.8,docker-image,master=node0');
+INSERT INTO tests VALUES(59,'psmdb 8.3 replica set with mongot vector search','anydbver deploy node0 os:el9 psmdb:8.3,replica-set=rs0 mongot node1 os:el9 psmdb:8.3,replica-set=rs0,master=node0 mongot');
 CREATE TABLE test_cases(
   test_id int,
   cmd varchar(1000)
@@ -2887,6 +2888,7 @@ INSERT INTO test_cases VALUES(48,'echo "patronictl list" | anydbver exec node0 |
 INSERT INTO test_cases VALUES(56,'echo "clickhouse-client -q \"select version()\"" | anydbver exec node0 | grep -q ^26.8');
 INSERT INTO test_cases VALUES(57,'echo "clickhouse-client -q \"create table t on cluster cluster1 (id UInt64) engine=ReplicatedMergeTree order by id\"; clickhouse-client -q \"insert into t values (1)\"" | anydbver exec node0 && sleep 5 && echo "clickhouse-client -q \"select count() from t\"" | anydbver exec node2 | grep -q ^1');
 INSERT INTO test_cases VALUES(58,'echo "clickhouse-client -q \"select count() from system.clusters where cluster=''cluster1''\"" | anydbver exec node0 | grep -q ^2');
+INSERT INTO test_cases VALUES(59,'echo "curl -s localhost:8080/health" | anydbver exec node1 | grep -q SERVING');
 CREATE TABLE mariadb_version(
   version varchar(20),
   os varchar(20),
@@ -4273,6 +4275,7 @@ INSERT INTO ansible_arguments VALUES('mariadb','galera','%','','extra_replicatio
 INSERT INTO ansible_arguments VALUES('mariadb','galera','%','','extra_db_opts_file','mariadb/galera.cnf',2,'');
 INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','version','%','VERSION','extra_pbm_version','2',1,1);
 INSERT INTO ansible_arguments VALUES('percona-backup-mongodb','s3','%','','extra_pbm_s3_url','',1,NULL);
+INSERT INTO ansible_arguments VALUES('percona-search-mongodb','version','%','VERSION','extra_mongot_version','1.70',1,1);
 INSERT INTO ansible_arguments VALUES('ldap','password','%','','extra_db_password','secret',1,1);
 INSERT INTO ansible_arguments VALUES('haproxy-pg','version','%','NODE','extra_haproxy_pg','',1,1);
 INSERT INTO ansible_arguments VALUES('haproxy-patroni','version','%','NODE','extra_haproxy_patroni','',1,1);
@@ -4429,6 +4432,7 @@ INSERT INTO version_sources VALUES('mongodb','MongoDB Community','mongodb_versio
 INSERT INTO version_sources VALUES('clickhouse','ClickHouse','clickhouse_version','',0,87);
 INSERT INTO version_sources VALUES('pxb','Percona XtraBackup','percona_xtrabackup_version','',1,90);
 INSERT INTO version_sources VALUES('pbm','Percona Backup for MongoDB','percona_backup_mongodb_version','',1,100);
+INSERT INTO version_sources VALUES('mongot','Percona Search for MongoDB','general_version','percona-search-mongodb',0,102);
 INSERT INTO version_sources VALUES('pmm','PMM Server','docker_hub','percona/pmm-server',1,105);
 INSERT INTO version_sources VALUES('pmm-client','PMM Client','general_version','pmm-client',0,110);
 INSERT INTO version_sources VALUES('proxysql','Percona ProxySQL','general_version','percona-proxysql',0,120);
@@ -4493,6 +4497,7 @@ INSERT INTO version_series VALUES('clickhouse','26.7','ga');
 INSERT INTO version_series VALUES('clickhouse','26.8','lts');
 INSERT INTO version_series VALUES('clickhouse','26.9','ga');
 INSERT INTO version_series VALUES('clickhouse','26.10','ga');
+INSERT INTO version_series VALUES('percona-search-mongodb','1.70','ga');
 INSERT INTO version_series VALUES('pmm-client','2','eol');
 INSERT INTO version_series VALUES('pmm-client','3','ga');
 INSERT INTO version_series VALUES('percona-backup-mongodb','2','ga');
@@ -4513,6 +4518,7 @@ INSERT INTO keyword_aliases VALUES('percona-xtradb-cluster','pxc');
 INSERT INTO keyword_aliases VALUES('percona-server-mongodb-operator','k8s-psmdb');
 INSERT INTO keyword_aliases VALUES('percona-server-mysql-operator','k8s-ps');
 INSERT INTO keyword_aliases VALUES('percona-backup-mongodb','pbm');
+INSERT INTO keyword_aliases VALUES('percona-search-mongodb','mongot');
 INSERT INTO keyword_aliases VALUES('nfs-server','nfs');
 INSERT INTO keyword_aliases VALUES('k8s-pmm-ha','pmm-ha');
 INSERT INTO keyword_aliases VALUES('cloudnative-pg-operator','k8s-cnpg');
@@ -5462,6 +5468,18 @@ INSERT INTO general_version VALUES('3.9.1-1','el10','x86_64','pmm-client');
 INSERT INTO general_version VALUES('3.9.1-1','el10','aarch64','pmm-client');
 INSERT INTO general_version VALUES('2.7.3-1.2','el8','x86_64','percona-proxysql');
 INSERT INTO general_version VALUES('2.7.3-1.2','el9','x86_64','percona-proxysql');
+INSERT INTO general_version VALUES('1.70.3-1','el8','x86_64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.3-1','el8','aarch64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.3-1','el9','x86_64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.3-1','el9','aarch64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.4-2','el8','x86_64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.4-2','el8','aarch64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.4-2','el9','x86_64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.4-2','el9','aarch64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.5-3','el8','x86_64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.5-3','el8','aarch64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.5-3','el9','x86_64','percona-search-mongodb');
+INSERT INTO general_version VALUES('1.70.5-3','el9','aarch64','percona-search-mongodb');
 INSERT INTO general_version VALUES('3.2.6-18','el8','x86_64','percona-orchestrator');
 INSERT INTO general_version VALUES('3.2.6-19','el8','x86_64','percona-orchestrator');
 INSERT INTO general_version VALUES('3.2.6-20','el8','x86_64','percona-orchestrator');

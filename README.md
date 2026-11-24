@@ -88,6 +88,7 @@ percona-postgresql               Installs Percona Postgresql distribution
 percona-proxysql                 Installs ProxySQL from Percona's packages
 percona-server                   Installs Percona Server for MySQL
 percona-server-mongodb           Installs Percona Server for MongoDB
+percona-search-mongodb           Installs mongot (Percona Search for MongoDB, alias mongot) next to PSMDB 8.3+
 percona-xtradb-cluster           Installs Percona XtraDB Cluster (Percona Server patched to support Galera replication)
 barman                           Installs Barman, Postgresql backup and recovery manager
 haproxy-patroni                  Installs haproxy and configures it in front of a Patroni cluster

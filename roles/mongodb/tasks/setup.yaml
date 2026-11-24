@@ -94,6 +94,16 @@
     cmd: /bin/bash /vagrant/tools/setup_mongodb_kerberos.sh "{{kerberos_samba_ip}}" "{{db_password}}"
     creates: /root/kerberos-mongodb.configured
 
+- name: Point mongod at the local mongot
+  when: mongot_version != '' and (psmdb_version != '' or mongo_org_version != '')
+  command:
+    cmd: /vagrant/tools/yq -i ea '. as $item ireduce ({}; . * $item )' /etc/mongod.conf /vagrant/configs/mongo/mongot.conf
+    creates: /root/mongot.conf.applied
+
+- name: Avoid re-merging the mongot parameters on next runs
+  when: mongot_version != '' and (psmdb_version != '' or mongo_org_version != '')
+  file: path=/root/mongot.conf.applied state=touch modification_time=preserve access_time=preserve
+
 - name: Start database with systemd
   when:  start_db == '1' and (db_systemd_service != '' or (soft != '' and os[dist][soft].systemd_service)  )
   shell:
@@ -112,6 +122,52 @@
       command:
         cmd: /bin/bash /vagrant/tools/setup_mongo_replication.sh "{{mongo_replicaset}}" "dba" "{{db_password}}" "{{master_ip}}"
         creates: /root/{{mongo_replicaset}}.init
+
+- name: Setup Percona Search for MongoDB (mongot)
+  when: mongot_version != '' and mongo_replicaset != '' and db_password != ''
+  block:
+    # mongot runs as mongod and rejects a password file with group or other
+    # bits, or with a trailing newline.
+    - name: Write the mongot password file
+      copy:
+        dest: /etc/mongot/secrets/passwordFile
+        content: "{{ db_password }}"
+        owner: mongod
+        group: mongod
+        mode: "0400"
+    - name: Write the mongot config
+      template:
+        src: mongot.yml.j2
+        dest: /etc/mongot/mongot.yml
+        owner: root
+        group: mongod
+        mode: "0640"
+    # Only the primary can create users; secondaries get it by replication.
+    - name: Create the mongot user with the searchCoordinator role
+      when: master_ip == ''
+      shell:
+        cmd: >-
+          until mongosh --quiet "mongodb://dba:{{ db_password | urlencode }}@127.0.0.1:27017/admin"
+          --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)' ; do sleep 2 ; done;
+          mongosh --quiet "mongodb://dba:{{ db_password | urlencode }}@127.0.0.1:27017/admin"
+          --eval 'db.getSiblingDB("admin").createUser({user: "mongot", pwd: "{{ db_password }}", roles: [{role: "searchCoordinator", db: "admin"}]})'
+          && touch /root/mongot-user.created
+        creates: /root/mongot-user.created
+    - name: Start mongot
+      systemd:
+        name: mongot
+        state: restarted
+        enabled: yes
+    # The JVM takes a while to start, and on a secondary the user arrives only
+    # after the initial sync. mongot restarts itself until it can log in.
+    - name: Wait for mongot to report SERVING
+      shell:
+        cmd: curl -s localhost:8080/health
+      register: mongot_health
+      until: "'SERVING' in mongot_health.stdout"
+      retries: 60
+      delay: 3
+      changed_when: false
 
 - name: setup mongos
   when: mongos_cfg != ''

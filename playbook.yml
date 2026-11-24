@@ -33,6 +33,7 @@
     pbm_version: "{{ lookup('vars', 'extra_pbm_version', default=lookup('env','PBM',default='') ) }}"
     pbm_agent: "{{ lookup('vars', 'extra_pbm_agent', default=lookup('env','PBM_AGENT',default='') ) }}"
     pbm_s3: "{{ lookup('vars', 'extra_pbm_s3_url', default=lookup('env','PBM_S3',default='') ) }}"
+    mongot_version: "{{ lookup('vars', 'extra_mongot_version', default=lookup('env','MONGOT',default='') ) }}"
     pmm_server_version: "{{ lookup('vars', 'extra_pmm_server_version', default=lookup('env','PMM_SERVER',default='') ) }}"
     pmm_client_version: "{{ lookup('vars', 'extra_pmm_client_version', default=lookup('env','PMM_CLIENT',default='') ) }}"
     pmm_url: "{{ lookup('vars', 'extra_pmm_url', default=lookup('env','PMM_URL',default='') ) }}"
@@ -178,6 +179,7 @@
       percona_xtradb_cluster_version != '' or
       psmdb_version != '' or
       pbm_version != '' or
+      mongot_version != '' or
       percona_postgresql_version != '' or
       percona_toolkit_version != '' or
       pmm_client_version != '' or
@@ -226,7 +228,7 @@
       'psmdb': psmdb_version, 'mongodb': mongo_org_version,
       'clickhouse': clickhouse_version,
       'valkey': vites_version, 'pmm-client': pmm_client_version,
-      'pbm': pbm_version, 'percona-xtrabackup': percona_xtrabackup_version,
+      'pbm': pbm_version, 'mongot': mongot_version, 'percona-xtrabackup': percona_xtrabackup_version,
       'patroni': patroni_version, 'repmgr': repmgr_version, 'pgbouncer': pgbouncer,
       'pgpool': pgpool_version, 'odyssey': odyssey_version, 'wal-g': walg_version,
       'pgbackrest': pgbackrest_version, 'barman': barman_version,
@@ -378,7 +380,7 @@
         name: patroni
 
     - name: MongoDB Role
-      when: psmdb_version != '' or pbm_version != '' or pbm_agent != '' or mongo_org_version != ''
+      when: psmdb_version != '' or pbm_version != '' or pbm_agent != '' or mongo_org_version != '' or mongot_version != ''
       include_role:
         name: mongodb
 

@@ -1,5 +1,31 @@
 ---
 # tasks file for mongodb
+- name: Check that mongot can run next to this mongod
+  when: mongot_version != ''
+  block:
+    - name: Fail when mongot has no package for this OS
+      when: not mongot_info
+      fail:
+        msg: >-
+          Percona Search for MongoDB {{ mongot_version }} has no {{ dist }} {{ ansible_architecture }}
+          package. Percona builds it for el8 and el9 (x86_64 and aarch64): deploy with os:el9.
+    - name: Fail when mongot has no mongod on the same node
+      when: psmdb_version == '' and mongo_org_version == ''
+      fail:
+        msg: >-
+          mongot runs next to mongod on the same node: add psmdb:8.3,replica-set=rs0
+          to this node, for example 'anydbver deploy psmdb:8.3,replica-set=rs0 mongot'.
+    - name: Fail when mongod is older than 8.3 or not in a replica set
+      when: >-
+        mongo_replicaset == '' or
+        (psmdb_version != '' and psmdb_version is version('8.3', '<')) or
+        (mongo_org_version != '' and mongo_org_version is version('8.2', '<'))
+      fail:
+        msg: >-
+          mongot needs Percona Server for MongoDB 8.3 or later in a replica set
+          (got psmdb {{ psmdb_version | default('-', true) }}, replica-set={{ mongo_replicaset | default('none', true) }}).
+          Use psmdb:8.3,replica-set=rs0 on the same node.
+
 - name: enable repo Percona Server for MongoDB
   when: psmdb_version != ''
   command:
@@ -65,6 +91,18 @@
     name: "percona-backup-mongodb-{{percona_backup_mongodb_ver}}"
     state: present
     disable_gpg_check: yes
+
+- name: enable repo Percona Search for MongoDB
+  when: mongot_version != ''
+  command:
+    cmd: /usr/bin/percona-release enable ps4m release
+    creates: /etc/yum.repos.d/percona-ps4m-release.repo
+
+- name: install Percona Search for MongoDB
+  when: mongot_version != ''
+  package:
+    name: "{{ mongot_package }}"
+    state: present
 
 - name: MongoDB Setup tasks
   when: install_only == ''

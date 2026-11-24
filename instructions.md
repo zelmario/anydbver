@@ -27,6 +27,7 @@ If you only read one section, read [Command Anatomy](#command-anatomy) and
    - [PostgreSQL HA with Patroni / repmgr / HAProxy](#postgresql-ha-with-patroni--repmgr--haproxy)
    - [PostgreSQL backups with Barman](#postgresql-backups-with-barman)
    - [MongoDB / PSMDB replica set](#mongodb--psmdb-replica-set)
+   - [MongoDB vector search (mongot)](#mongodb-vector-search-mongot)
    - [ClickHouse](#clickhouse-1)
    - [MongoDB sharded cluster](#mongodb-sharded-cluster)
    - [Backups (pgbackrest, PBM, MinIO)](#backups-pgbackrest-pbm-minio)
@@ -170,6 +171,7 @@ anydbver deploy help percona-server  # usage + aliases for one keyword
 | `percona-postgresql`      | `ppg`, `percona-postgres`    | Percona Distribution for PostgreSQL       |
 | `percona-server-mongodb`  | `psmdb`                      | Percona Server for MongoDB                |
 | `mongodb`                 | `mongodb-community`          | MongoDB Community 5.0 to 9.0 (same options as `psmdb`) |
+| `percona-search-mongodb`  | `mongot`                     | mongot for vector and full-text search, next to PSMDB 8.3+ |
 | `valkey`                  |                              | Valkey (Redis fork)                       |
 | `clickhouse`              | `clickhouse-server`          | ClickHouse, with a built-in ClickHouse Keeper for replicas |
 
@@ -356,6 +358,10 @@ the ones you will use most often.
 | `role=cfg` / `configsrv`  | Run this mongod as a config server              |
 | `mongos-cfg:name/n0,n1,n2`            | mongos: config-server RS definition |
 | `mongos-shard:rs0/n0,n1,n2,rs1/...`   | mongos: shard RS list               |
+
+Add the separate `mongot` keyword to a `psmdb:8.3,replica-set=...` node for
+vector and full-text search, see
+[MongoDB vector search (mongot)](#mongodb-vector-search-mongot).
 
 ### Backup
 
@@ -625,6 +631,31 @@ anydbver deploy minio:docker-image \
 # PSMDB 8.0 authenticating against an LDAP server on node0
 anydbver deploy ldap node1 ldap-master:default psmdb:8.0
 ```
+
+### MongoDB vector search (mongot)
+
+`mongot` (alias of `percona-search-mongodb`) installs Percona Search for
+MongoDB on the same node as mongod, so `$vectorSearch`, `$search` and
+`createSearchIndex()` work right after the deploy. It needs PSMDB 8.3 or
+later in a replica set, on el8 or el9 (x86_64 or aarch64). A bare `mongot`
+deploys the newest 1.70 build.
+
+```sh
+# Single-member replica set with mongot
+anydbver deploy node0 os:el9 psmdb:8.3,replica-set=rs0 mongot
+
+# 3-node replica set, one mongot per member
+anydbver deploy \
+  node0 os:el9 psmdb:8.3,replica-set=rs0 mongot \
+  node1 os:el9 psmdb:8.3,replica-set=rs0,master=node0 mongot \
+  node2 os:el9 psmdb:8.3,replica-set=rs0,master=node0 mongot
+```
+
+anydbver adds the `mongotHost` and `searchIndexManagementHostAndPort`
+parameters to `/etc/mongod.conf`, creates the `mongot` user with the
+`searchCoordinator` role (password = the `password=` of psmdb), writes
+`/etc/mongot/mongot.yml` and waits until `curl localhost:8080/health`
+reports `SERVING`. Sharded clusters are not wired yet.
 
 ### ClickHouse
 

@@ -1,0 +1,25 @@
+# Written by anydbver. mongot follows the local mongod through a change stream
+# and serves search queries to it over gRPC on localhost:27028.
+syncSource:
+  replicaSet:
+    hostAndPort: "localhost:27017"
+    scramAuth:
+      username: mongot
+      passwordFile: "/etc/mongot/secrets/passwordFile"
+      authSource: admin
+      tls:
+        enabled: false
+storage:
+  dataPath: "/var/lib/mongot"
+server:
+  grpc:
+    address: "localhost:27028"
+    tls:
+      mode: "disabled"
+metrics:
+  enabled: true
+  address: "0.0.0.0:9946"
+healthCheck:
+  address: "0.0.0.0:8080"
+logging:
+  verbosity: INFO

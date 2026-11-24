@@ -16,6 +16,7 @@
 | `postgresql`              | `pg`, `postgres`              | PostgreSQL from PGDG                      |
 | `percona-postgresql`      | `ppg`, `percona-postgres`     | Percona Distribution for PostgreSQL       |
 | `percona-server-mongodb`  | `psmdb`                       | Percona Server for MongoDB                |
+| `percona-search-mongodb`  | `mongot`                      | mongot (vector + full-text search) on the psmdb node |
 | `mongodb`                 | `mongodb-community`           | MongoDB Community (repo.mongodb.org)      |
 | `valkey`                  |                               | Valkey (Redis fork)                       |
 | `clickhouse`              | `clickhouse-server`           | ClickHouse (packages.clickhouse.com)      |
@@ -23,6 +24,8 @@
 **`clickhouse`** installs from the official repository on EL 8/9/10, jammy, noble and bookworm, x86_64 and aarch64. Rows cover the LTS series from 25.3 and regular series from 26.4 (`anydbver versions clickhouse`). A node without `master=` is the cluster root; `master=nodeN` joins it. Every node lists all members of cluster `cluster1` (`cluster=` to rename, `shard=N` for more shards) with `internal_replication` on, so `ON CLUSTER` DDL, `ReplicatedMergeTree` and `Distributed` work right away. With 3+ nodes the root and the next two run a 3-member Keeper, otherwise the root runs one (v0.1.49+). Admin is `default` / `verysecretpassword1^`, and `clickhouse-client` on the node is preconfigured with it. `clickhouse:<ver>,docker-image` runs `clickhouse/clickhouse-server`.
 
 **`mongodb` takes the same options as `psmdb`** (`replica-set=`, `master=`, `role=shard|cfg`, `mongos-cfg:`/`mongos-shard:`, `user=`, `password=`, `docker-image`), installs from MongoDB's own yum repo on EL 8/9/10, x86_64 and aarch64, and covers 5.0 to 9.0, including 8.2 and 9.0 which Percona does not ship. Use it to compare the same version on Community and PSMDB (`psmdb:8.0.32` vs `mongodb:8.0.32`). LDAP and Kerberos are Enterprise features in MongoDB, so `ldap-server=`/`kerberos-server=` stay PSMDB-only. `mongodb:<ver>,docker-image` runs the official `mongo` image.
+
+**`mongot` needs `psmdb:8.3+` with `replica-set=` on the same node, el8 or el9 only** (Percona ships no el10 or Debian/Ubuntu PSMDB 8.3 rows here). Put `mongot` on every replica set member: `node0 os:el9 psmdb:8.3,replica-set=rs0 mongot node1 os:el9 psmdb:8.3,replica-set=rs0,master=node0 mongot`. The role sets `mongotHost`/`searchIndexManagementHostAndPort` to `localhost:27028`, creates user `mongot` (role `searchCoordinator`, password = psmdb `password=`), and waits for `curl localhost:8080/health` = SERVING. Sharded clusters are not wired. Versions: `anydbver versions mongot`.
 
 ## Replication / HA / proxies
 
@@ -151,6 +154,7 @@ Defaults on 2026-10-20:
 | `mongodb`       | 9.0.x         |
 | `clickhouse`    | 26.8.x (LTS)  |
 | `pbm`           | newest 2.x    |
+| `mongot`        | newest 1.70.x |
 | `pmm-client`    | newest 3.x    |
 | `k8s-pg`        | 3.1.0         |
 | `k8s-pxc`       | 1.20.0        |
