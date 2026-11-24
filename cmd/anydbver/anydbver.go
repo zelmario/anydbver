@@ -1558,6 +1558,8 @@ func deployHost(provider string, logger *log.Logger, namespace string, name stri
 			return match
 		})
 
+		content = quoteDecimalInventoryValues(content)
+
 		_, err = file.WriteString(content)
 		if err != nil {
 			fmt.Println("Error writing to file:", err)
@@ -1751,6 +1753,19 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 // playbookTimeout gives the playbook 20 minutes for up to 3 nodes and 4 more
 // minutes per extra node. Nodes install in parallel but share the CPU, so a
 // fixed 20 minutes failed 10-node sharded clusters on an 8-core machine.
+// inventoryDecimalValue matches an inventory value that is a bare decimal,
+// like a version series: extra_mongot_version='1.70'.
+var inventoryDecimalValue = regexp.MustCompile(`='([0-9]+\.[0-9]+)'`)
+
+// quoteDecimalInventoryValues keeps version series as strings. Ansible
+// evaluates INI host variables as Python literals even when they are quoted,
+// so '1.70' reached the roles as the float 1.7 and '26.10' as 26.1, and a
+// 'version like' lookup then matched the wrong series. Only the double-wrapped
+// form "'1.70'" survives as the string 1.70.
+func quoteDecimalInventoryValues(content string) string {
+	return inventoryDecimalValue.ReplaceAllString(content, `="'$1'"`)
+}
+
 func playbookTimeout(ansible_hosts_run_file string) int {
 	timeout := 1200
 	data, err := os.ReadFile(ansible_hosts_run_file)
