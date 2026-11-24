@@ -2893,6 +2893,13 @@ func main() {
 				binVer != "dev" && binVer != "unknown" && versionLess(dbVer, binVer) {
 				logger.Println("Version database update is available for", dbFile, ". Run anydbver update to see latest versions")
 			}
+			// The reverse: 'anydbver update' brought a DB from a newer release.
+			// Its keywords pass validation, but this binary's ansible image may
+			// have no role for the new ones, so they would install nothing.
+			if dbVer, err := ReadDatabaseVersion(dbFile); err == nil && dbVer != "" &&
+				binVer != "dev" && binVer != "unknown" && versionLess(binVer, dbVer) {
+				logger.Printf("anydbver %s is available, this binary is %s. Keywords added after %s will not deploy until you download the latest release from https://github.com/zelmario/anydbver/releases", dbVer, binVer, binVer)
+			}
 		},
 		Version: fmt.Sprintf("\nVersion: %s\nBuild: %s using %s\nCommit: %s", Version, Build, GoVersion, Commit),
 	}

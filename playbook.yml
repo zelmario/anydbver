@@ -242,6 +242,31 @@
       'sysbench': sysbench_version, 'percona-toolkit': percona_toolkit_version
       } | dict2items | rejectattr('value', 'eq', '') | map(attribute='key') | list }}
   tasks:
+    # The binary builds extra_* vars from the version DB, and 'anydbver update'
+    # can bring a DB newer than this image. A keyword added after this image
+    # (clickhouse on a 0.1.43 image) then reaches a playbook with no role for it,
+    # nothing installs, and the deploy ends without an error. Any extra_* var
+    # that no file in this playbook reads is a keyword this image cannot deploy.
+    - name: Fail early when a requested keyword has no handler in this image
+      vars:
+        handled_extra_vars: "{{ lookup('pipe', 'grep -rhoE \"extra_[a-z0-9_]+\" ' ~ playbook_dir ~ '/playbook.yml ' ~ playbook_dir ~ '/roles ' ~ playbook_dir ~ '/common | sort -u').split('\n') }}"
+        # Passed by the version DB on purpose but read by nobody: patroni also
+        # sets extra_percona_patroni_version, and the ansible minio role keeps
+        # its own credentials and bucket.
+        ignored_extra_vars:
+          - extra_patroni_version
+          - extra_minio_access_key
+          - extra_minio_secret_key
+          - extra_minio_bucket
+        unhandled_extra_vars: "{{ query('varnames', '^extra_') | difference(handled_extra_vars) | difference(ignored_extra_vars) | sort }}"
+      when: unhandled_extra_vars | length > 0
+      fail:
+        msg: >-
+          Nothing in this ansible image installs {{ unhandled_extra_vars | join(', ') }}.
+          If the keyword is new, your anydbver binary is older than your version database:
+          download the latest release from https://github.com/zelmario/anydbver/releases
+          and deploy again. If the keyword only runs as a container (valkey, for example),
+          add ',docker-image' to it.
     - name: Fail early when software is requested on a SUSE node
       when: dist.startswith('sles') and node_software_requested | length > 0
       fail:
