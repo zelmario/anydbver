@@ -994,6 +994,11 @@ type DeploymentKeywordData struct {
 }
 
 func IsDeploymentVersion(arg string) bool {
+	// An option is never a version. "nodes=2" starts with "node" and was
+	// taken for a node reference, so "k3d:nodes=2" asked for rancher/k3s:nodes=2.
+	if strings.Contains(arg, "=") {
+		return false
+	}
 	// "default" is the documented alias for node0, from when the first node
 	// was named that.
 	if strings.HasPrefix(arg, "node") || arg == "default" {
@@ -1110,8 +1115,25 @@ func ResolveAlias(tbl string, dbFile string, deployCmd string) (string, error) {
 	return result, nil
 }
 
+// normalizeKeywordOptions turns "k3d,cpus=2" into "k3d:cpus=2". Validation
+// reads the keyword up to the first ':' or ',', so the comma form passed it,
+// but parsing split only on ':' and got the keyword "k3d,cpus=2". That matched
+// no row and the item was dropped: "k3d,cpus=2" deployed a plain docker node
+// with no cluster, and exited 0.
+func normalizeKeywordOptions(keyword string) string {
+	comma := strings.Index(keyword, ",")
+	if comma < 0 {
+		return keyword
+	}
+	if colon := strings.Index(keyword, ":"); colon >= 0 && colon < comma {
+		return keyword
+	}
+	return keyword[:comma] + ":" + keyword[comma+1:]
+}
+
 func ParseDeploymentKeyword(logger *log.Logger, keyword string) DeploymentKeywordData {
 	args := make(map[string]string)
+	keyword = normalizeKeywordOptions(keyword)
 	parts := strings.SplitN(keyword, ":", 2)
 	deployCmd := parts[0]
 	if len(parts) > 1 {
@@ -1716,7 +1738,13 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 		"bash", "-c",
 	}...)
 
-	ansible_command := "cd /vagrant;until ansible -m ping -i ansible_hosts_run all &>/dev/null ; do sleep 1; done ; ANSIBLE_FORCE_COLOR=True ANSIBLE_DISPLAY_SKIPPED_HOSTS=False ansible-playbook -i ansible_hosts_run --forks 16 playbook.yml"
+	// An inventory Ansible can't parse is only a warning by default: the
+	// playbook then runs against no hosts, prints "no hosts matched" and the
+	// deploy exited 0 with nothing installed. Fail on it instead.
+	ansible_command := "cd /vagrant;export ANSIBLE_INVENTORY_UNPARSED_FAILED=True;" +
+		"if ! ansible -i ansible_hosts_run all --list-hosts 2>&1 | grep -q 'hosts ([1-9]'; then " +
+		"echo 'FAILED! the generated inventory has no usable hosts:'; ansible -i ansible_hosts_run all --list-hosts; cat ansible_hosts_run; exit 3; fi;" +
+		"until ansible -m ping -i ansible_hosts_run all &>/dev/null ; do sleep 1; done ; ANSIBLE_FORCE_COLOR=True ANSIBLE_DISPLAY_SKIPPED_HOSTS=False ansible-playbook -i ansible_hosts_run --forks 16 playbook.yml"
 
 	if verbose {
 		ansible_command += " -vvv"
@@ -1730,7 +1758,7 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 	ansible_output, err := runtools.RunPipe(logger, cmd_args, errMsg, ignoreMsg, true, env, playbookTimeout(ansible_hosts_run_file))
 	if err != nil {
 		logger.Println("Ansible failed with errors: ")
-		fatalPattern := regexp.MustCompile(`FAILED[!]|failed=`)
+		fatalPattern := regexp.MustCompile(`FAILED[!]|ERROR[!]|failed=`)
 		taskPattern := regexp.MustCompile(`^TASK \[.*\]`)
 		lastTask := ""
 		scanner := bufio.NewScanner(strings.NewReader(ansible_output))
@@ -1750,9 +1778,6 @@ func runPlaybook(logger *log.Logger, namespace string, ansible_hosts_run_file st
 	}
 }
 
-// playbookTimeout gives the playbook 20 minutes for up to 3 nodes and 4 more
-// minutes per extra node. Nodes install in parallel but share the CPU, so a
-// fixed 20 minutes failed 10-node sharded clusters on an 8-core machine.
 // inventoryDecimalValue matches an inventory value that is a bare decimal,
 // like a version series: extra_mongot_version='1.70'.
 var inventoryDecimalValue = regexp.MustCompile(`='([0-9]+\.[0-9]+)'`)
@@ -1766,6 +1791,9 @@ func quoteDecimalInventoryValues(content string) string {
 	return inventoryDecimalValue.ReplaceAllString(content, `="'$1'"`)
 }
 
+// playbookTimeout gives the playbook 20 minutes for up to 3 nodes and 4 more
+// minutes per extra node. Nodes install in parallel but share the CPU, so a
+// fixed 20 minutes failed 10-node sharded clusters on an 8-core machine.
 func playbookTimeout(ansible_hosts_run_file string) int {
 	timeout := 1200
 	data, err := os.ReadFile(ansible_hosts_run_file)
@@ -1869,7 +1897,10 @@ mirrors:
 	env := map[string]string{}
 	errMsg := "Error creating k3d cluster"
 	ignoreMsg := regexp.MustCompile("ignore this")
-	runtools.RunPipe(logger, k3d_create_cmd, errMsg, ignoreMsg, true, env, 600)
+	if _, err := runtools.RunPipe(logger, k3d_create_cmd, errMsg, ignoreMsg, true, env, 600); err != nil {
+		// Without a cluster every later step fails with a less useful error.
+		logger.Fatalf("%s %s: %v", errMsg, cluster_name, err)
+	}
 
 	if cpus, ok := args["cpus"]; ok {
 		limitK3dNodeCPUs(logger, cluster_name, cpus)
@@ -2327,9 +2358,23 @@ func unknownDeployOptions(logger *log.Logger, args []string) []string {
 	return problems
 }
 
+// quotedDeployValues rejects a single quote in an option value. Values reach
+// the inventory as extra_x='value' and the roles' shell commands the same way,
+// so "password=a'b" left Ansible with no inventory at all.
+func quotedDeployValues(args []string) []string {
+	var problems []string
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "node") || !strings.Contains(arg, "'") {
+			continue
+		}
+		problems = append(problems, fmt.Sprintf("Error: %q contains a single quote ('). Option values are passed to Ansible and shell commands in single quotes, so they can't contain one.", arg))
+	}
+	return problems
+}
+
 // validateDeployOptions fails fast on an option the deploy would drop.
 func validateDeployOptions(logger *log.Logger, args []string) {
-	problems := unknownDeployOptions(logger, args)
+	problems := append(quotedDeployValues(args), unknownDeployOptions(logger, args)...)
 	if len(problems) == 0 {
 		return
 	}
@@ -2337,6 +2382,14 @@ func validateDeployOptions(logger *log.Logger, args []string) {
 		logger.Println(line)
 	}
 	os.Exit(runtools.ANYDBVER_UNKNOWN_OPTION)
+}
+
+// applyGlobalK3dCPUs makes --cpus the default for k3d nodes, as it already is
+// for docker and docker-image nodes. cpus= on the k3d keyword overrides it.
+func applyGlobalK3dCPUs(args map[string]string, cpus string) {
+	if _, set := args["cpus"]; !set && cpus != "" {
+		args["cpus"] = cpus
+	}
 }
 
 func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider string, namespace string, args []string, verbose bool, memory string, cpus string, keep bool) {
@@ -2377,6 +2430,7 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 			} else if deployment_keyword.Cmd == "k3d" {
 				nodeProvider[currentNode] = "kubectl"
 				osvers = re_lastosver.ReplaceAllString(osvers, "")
+				applyGlobalK3dCPUs(deployment_keyword.Args, cpus)
 				createK3dCluster(logger, namespace, currentNode, deployment_keyword.Args)
 			} else if arg == "provider:kubectl" {
 				nodeProvider[currentNode] = "kubectl"
@@ -2386,6 +2440,7 @@ func deployHosts(logger *log.Logger, ansible_hosts_run_file string, provider str
 				nodeProvider[currentNode] = "kubectl"
 				osvers = re_lastosver.ReplaceAllString(osvers, "")
 				deployment_keyword := ParseDeploymentKeyword(logger, "k3d")
+				applyGlobalK3dCPUs(deployment_keyword.Args, cpus)
 				createK3dCluster(logger, namespace, currentNode, deployment_keyword.Args)
 			}
 		}
