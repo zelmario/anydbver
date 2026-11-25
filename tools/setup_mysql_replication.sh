@@ -257,11 +257,19 @@ else
       systemctl stop $MYSQLD_UNIT
       mysqld --user=mysql --wsrep-provider=none &>/dev/null &
       until mysqladmin --silent --connect-timeout=30 --wait=4 ping; do sleep 5; done
-      mysql <<EOF
+      if has_replica_cmd; then
+        mysql <<EOF
+          RESET REPLICA ALL;
+          RESET BINARY LOGS AND GTIDS;
+          SET GLOBAL GTID_PURGED='${GTID}';
+EOF
+      else
+        mysql <<EOF
           RESET SLAVE ALL;
           RESET MASTER;
           SET GLOBAL GTID_PURGED='${GTID}';
 EOF
+      fi
       mysqladmin shutdown
       systemctl start $MYSQLD_UNIT
       until mysqladmin --silent --connect-timeout=30 --wait=4 ping; do sleep 5; done
@@ -299,6 +307,14 @@ EOF
           START SLAVE;
 EOF
         fi
+      elif has_replica_cmd; then
+        mysql <<EOF
+          RESET BINARY LOGS AND GTIDS;
+          SET GLOBAL GTID_PURGED=CONCAT(@@gtid_purged, ',${GTID}');
+          STOP REPLICA FOR CHANNEL '${CHANNEL}';
+          CHANGE REPLICATION SOURCE TO SOURCE_HOST='${MASTER_IP}', SOURCE_USER='${MASTER_USER}', SOURCE_PASSWORD='${MASTER_PASSWORD}', SOURCE_AUTO_POSITION=1, SOURCE_SSL=1 FOR CHANNEL '${CHANNEL}';
+          START REPLICA FOR CHANNEL '${CHANNEL}';
+EOF
       else
         mysql <<EOF
           RESET MASTER;
