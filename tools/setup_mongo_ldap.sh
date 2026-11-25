@@ -64,17 +64,19 @@ if [[ $HAS_REPL == 0 ]]; then
   sed -i -e 's/replSetName:/#replSetName:/i' -e 's/replication:/#replication:/i' /etc/mongod.conf
 fi
 systemctl restart mongod
+# mongosh right after the restart raced mongod and the user was never created.
+for i in $(seq 60); do $MONGO --quiet --eval 'db.runCommand({ping: 1})' &>/dev/null && break; sleep 1; done
 
 $MONGO <<EOF
 db = connect("mongodb://dba:$DB_PASS@127.0.0.1:27017/admin")
 db.getSiblingDB("\$external").createUser({user : '$DB_USER', roles: [ {role : "read", db: 'percona'} ]})
-db.getSiblingDB("\$external").auth({mechanism: "PLAIN",user : '$DB_USER',pwd: '$DB_PASS',digestPassword: false})
+db.getSiblingDB("\$external").auth({mechanism: "PLAIN",user : '$DB_USER',pwd: '$DB_LDAP_USR_PASS',digestPassword: false})
 EOF
 
-$MONGO -u $DB_USER --password="$DB_LDAP_USR_PASS" --authenticationDatabase '$external' --authenticationMechanism PLAIN <<EOF
-use percona
-db.col1.find()
-EOF
+if ! $MONGO -u $DB_USER --password="$DB_LDAP_USR_PASS" --authenticationDatabase '$external' --authenticationMechanism PLAIN --quiet --eval 'db.getSiblingDB("percona").col1.findOne()'; then
+  echo "LDAP login as $DB_USER failed" >&2
+  exit 1
+fi
 
 if [[ $HAS_REPL == 0 ]]; then
   sed -i -e 's/#replSetName:/replSetName:/i' -e 's/#replication:/replication:/i' /etc/mongod.conf
@@ -82,4 +84,4 @@ if [[ $HAS_REPL == 0 ]]; then
 fi
 
 
-echo "$MONGO -u $DB_USER --password=$DB_LDAP_USR_PASS --authenticationDatabase '$external' --authenticationMechanism PLAIN" >/root/mongo-ldap.configured
+echo "$MONGO -u $DB_USER --password=$DB_LDAP_USR_PASS --authenticationDatabase '\$external' --authenticationMechanism PLAIN" >/root/mongo-ldap.configured
