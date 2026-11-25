@@ -16,19 +16,26 @@ func VersionFetch(program string, dbFile string) error {
 		return fmt.Errorf("can't fetch versions for program: %s %w", program, err)
 	}
 
+	// One dead repository must not stop the run. PGDG answers 410 for majors
+	// it dropped on an architecture (13 on rhel-8-aarch64), and returning on
+	// that error skipped every OS and major after it.
+	failed := 0
 	for _, pu := range progUrls {
+		var err error
 		if strings.HasSuffix(pu.url, "/Packages") || strings.HasSuffix(pu.url, "/Packages.gz") {
-			if err := VersionFetchFromDebianPackages(dbFile, program, pu); err != nil {
-				return fmt.Errorf("can't get versions from debian packages file %w", err)
-			}
+			err = VersionFetchFromDebianPackages(dbFile, program, pu)
 		} else {
-			if err := VersionFetchFromRpmPackages(dbFile, program, pu); err != nil {
-				return fmt.Errorf("can't get versions from RPM packages file %w", err)
-			}
+			err = VersionFetchFromRpmPackages(dbFile, program, pu)
 		}
-
+		if err != nil {
+			failed++
+			fmt.Printf("Warning: skipping %s for %s %s: %v\n", pu.url, program, pu.osver, err)
+		}
 	}
 
+	if failed > 0 && failed == len(progUrls) {
+		return fmt.Errorf("can't fetch versions for %s: all %d sources failed", program, failed)
+	}
 	return nil
 }
 
@@ -69,7 +76,7 @@ func VersionFetchFromDebianPackages(dbFile string, program string, pu programVer
 	versions_cnt := 0
 	for pkgName, versions := range versionsByPackage {
 		for _, version := range versions {
-			versions_cnt += len(versions)
+			versions_cnt++
 			switch program {
 			case "postgresql":
 				query := "REPLACE INTO postgresql_version VALUES(?,?,?,?,?,?,?,?,?)"
