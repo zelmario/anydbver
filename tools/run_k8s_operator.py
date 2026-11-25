@@ -15,6 +15,7 @@ import urllib.parse
 import urllib.request
 import urllib.error
 import json
+import math
 import secrets
 
 COMMAND_TIMEOUT = 600
@@ -864,6 +865,23 @@ spec:
               cert_yaml_path], "Can't create {} certificates".format(svc_name))
 
 
+def limit_pmm_nginx_workers(pmm, cpus):
+    # nginx "worker_processes auto" starts one worker per node core and does
+    # not see the pod's CPU limit, so cpus=2 still gave 8 workers on an 8 core
+    # host. Same fix as docker-image PMM: one worker per allowed CPU. The pod
+    # filesystem is not persistent, so a restarted pod goes back to auto.
+    try:
+        workers = max(1, math.ceil(float(cpus)))
+    except ValueError:
+        return
+    pod = run_get_line(["kubectl", "-n", pmm["namespace"], "get", "pod", "-l", pmm["labels"],
+                        "-o", "jsonpath={.items[0].metadata.name}"],
+                       "Can't find the PMM pod").strip()
+    run_fatal(["kubectl", "-n", pmm["namespace"], "exec", pod, "--", "bash", "-c",
+               "sed -i 's/^worker_processes auto;/worker_processes {};/' /etc/nginx/nginx.conf && nginx -s reload".format(workers)],
+              "Can't limit PMM nginx workers")
+
+
 def run_pmm_server(args, helm_path, pmm):
     if args.operator_name != "":
         return
@@ -962,6 +980,8 @@ def run_pmm_server(args, helm_path, pmm):
              "helm pmm install problem")
     if not k8s_wait_for_ready(pmm["namespace"], pmm["labels"]):
         raise Exception("PMM Pod is not starting")
+    if args.pmm_cpus and pmm["helm_repo_name"] == "percona":
+        limit_pmm_nginx_workers(pmm, args.pmm_cpus)
     if pmm["helm_repo_name"] != "percona":
         time.sleep(10)
         run_fatal(["kubectl", "-n", pmm["namespace"],
