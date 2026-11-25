@@ -126,10 +126,13 @@
     update_cache: yes
 
 
+# PGDG rebuilds every package for each RHEL minor and removes the old builds:
+# postgresql17-server-17.12-1PGDG.rhel9.8 was replaced by ...rhel9.9, and
+# every el9 row in the version database stopped installing. Match any minor.
 - name: install Postgres
   when: percona_postgresql_version != '' or postgresql_version != ''
   package:
-    name: "{{ package_info['packages'].split('|') }}"
+    name: "{{ package_info['packages'].split('|') | map('regex_replace', '(PGDG\\.rhel[0-9]+)\\.[0-9]+$', '\\1*') | list }}"
     state: present
 
 - name: Check that pg_tde can be deployed here

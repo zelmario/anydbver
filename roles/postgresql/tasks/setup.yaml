@@ -73,7 +73,7 @@
     - name: Start database with systemd (logical replication or master)
       when: (replication_type == 'logical' or master_ip == '') and patroni_version == ''
       command:
-        cmd: systemctl start "{{package_info['systemd_service']}}"
+        cmd: systemctl enable --now "{{package_info['systemd_service']}}"
 
     - name: change postgresql password on debian-based
       when: (ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu') and (replication_type == 'logical' or master_ip == '') and patroni_version == ''
@@ -100,7 +100,7 @@
 - name: Start database with systemd
   when: patroni_version == ''
   command:
-    cmd: systemctl start "{{package_info['systemd_service']}}"
+    cmd: systemctl enable --now "{{package_info['systemd_service']}}"
 
 - name: Transparent Data Encryption (pg_tde)
   when: pg_tde != '' and patroni_version == ''
