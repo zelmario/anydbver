@@ -821,7 +821,7 @@ func shellExec(logger *log.Logger, provider, namespace string, args []string) {
 		name = args[0]
 	}
 	cluster_context := ""
-	cluster_name := anydbver_common.MakeContainerHostName(logger, namespace, name)
+	cluster_name := anydbver_common.K3dClusterName(logger, namespace, name)
 	clusterIp, err := getContainerIp("docker", logger, namespace, "k3d-"+cluster_name+"-"+"server-0")
 	if err != nil {
 		clusterIp = ""
@@ -1291,7 +1291,7 @@ func runOperatorTool(logger *log.Logger, namespace string, name string, run_oper
 		return
 	}
 	cluster_context := ""
-	cluster_name := anydbver_common.MakeContainerHostName(logger, namespace, name)
+	cluster_name := anydbver_common.K3dClusterName(logger, namespace, name)
 	clusterIp, err := getContainerIp("docker", logger, namespace, "k3d-"+cluster_name+"-"+"server-0")
 	if err != nil {
 		clusterIp = ""
@@ -1813,7 +1813,7 @@ func playbookTimeout(ansible_hosts_run_file string) int {
 }
 
 func createK3dCluster(logger *log.Logger, namespace string, name string, args map[string]string) {
-	cluster_name := anydbver_common.MakeContainerHostName(logger, namespace, name)
+	cluster_name := anydbver_common.K3dClusterName(logger, namespace, name)
 	k3d_agents := 2
 	if nodes, ok := args["nodes"]; ok {
 		if nodes_num, err := strconv.Atoi(nodes); err == nil {
@@ -1971,7 +1971,7 @@ func checkEverestPrerequisites(logger *log.Logger) {
 func deployEverest(logger *log.Logger, namespace string, nodes int, everestVersion string) {
 	checkEverestPrerequisites(logger)
 
-	cluster_name := anydbver_common.MakeContainerHostName(logger, namespace, "cluster1")
+	cluster_name := anydbver_common.K3dClusterName(logger, namespace, "cluster1")
 
 	// Create k3d cluster
 	logger.Printf("Creating k3d cluster with %d nodes...", nodes)

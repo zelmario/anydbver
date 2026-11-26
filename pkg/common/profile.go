@@ -2,6 +2,7 @@ package common
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -254,7 +255,8 @@ func GetUser(logger *log.Logger) string {
 			continue
 		}
 		if parts[0] == "PROFILE" || parts[0] == "LXD_PROFILE" {
-			profile = strings.TrimSpace(parts[1])
+			// PROFILE='name' is shell syntax people copy in; the quotes are not part of the name.
+			profile = strings.Trim(strings.TrimSpace(parts[1]), `"'`)
 			break
 		}
 	}
@@ -352,6 +354,28 @@ func MakeContainerHostName(logger *log.Logger, namespace string, name string) st
 	}
 
 	return strings.ReplaceAll(prefix+"-"+name, ".", "-")
+}
+
+// K3dNameLimit is the longest cluster name k3d accepts.
+const K3dNameLimit = 32
+
+// K3dClusterName is MakeContainerHostName cut to k3d's 32-char limit. A long
+// user name (vinodh-krishnaswamy) plus a namespace made k3d refuse to create
+// the cluster. Names that fit are unchanged, so existing clusters keep their
+// names. Longer ones keep a readable prefix plus a hash of the full name, so
+// two different long names don't collide. destroy finds clusters by network,
+// not by name, so it needs no mapping.
+func K3dClusterName(logger *log.Logger, namespace string, name string) string {
+	return shortenK3dName(MakeContainerHostName(logger, namespace, name))
+}
+
+func shortenK3dName(full string) string {
+	if len(full) <= K3dNameLimit {
+		return full
+	}
+	hash := fmt.Sprintf("%x", sha256.Sum256([]byte(full)))[:6]
+	prefix := strings.TrimRight(full[:K3dNameLimit-len(hash)-1], "-")
+	return prefix + "-" + hash
 }
 
 // ContainerState reports whether a container of this name exists and whether it
